@@ -1237,17 +1237,24 @@
           </div>
           <div class="perf-box" style="width: 250px;">
             <div class="perf-icon" style="color:var(--green);">🎯</div>
-            <span class="perf-val" style="color:var(--green);">96.8%</span>
+            <span class="perf-val" style="color:var(--green);" id="analytics-accuracy">96.8%</span>
             <div class="perf-label">Validation Accuracy</div>
           </div>
           <div class="perf-box" style="width: 250px;">
             <div class="perf-icon" style="color:var(--accent);">⏱</div>
-            <span class="perf-val" style="color:var(--accent);">~11ms</span>
+            <span class="perf-val" style="color:var(--accent);" id="analytics-infer">~11ms</span>
             <div class="perf-label">Average Inference Time</div>
           </div>
         </div>
         <div
-          style="margin-top: 40px; text-align: center; font-size: 0.8rem; color: var(--dim); padding: 20px; border: 1px dashed var(--border);">
+          style="margin-top: 30px; display: flex; align-items: center; justify-content: center; gap: 10px; font-family: 'Share Tech Mono', monospace; font-size: 0.9rem;">
+          <div
+            style="width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 1s infinite;">
+          </div>
+          <span id="analytics-status" style="color: var(--green);">ENGINE ACTIVE: CONTINUOUS LEARNING PIPELINE</span>
+        </div>
+        <div
+          style="margin-top: 30px; text-align: center; font-size: 0.8rem; color: var(--dim); padding: 20px; border: 1px dashed var(--border);">
           <p>A simulated Machine Learning component analyzes load in real-time derived from Traffic Flow volume.</p>
           <p style="margin-top: 8px;">Because this is an active simulation loop, the metrics naturally build and release
             congestion states dynamically via the API.</p>
@@ -1551,6 +1558,30 @@
         });
         document.getElementById('confidence').textContent = data.ml.confidence + '%';
         document.getElementById('infer-time').textContent = data.ml.infer_time + 'ms';
+
+        // Analytics Engine Animation
+        const accuracySpan = document.getElementById('analytics-accuracy');
+        const inferSpan = document.getElementById('analytics-infer');
+        if (accuracySpan && inferSpan) {
+          // Fluctuate accuracy slightly around 96.8
+          const rAcc = 96.0 + Math.random() * 1.5;
+          accuracySpan.textContent = rAcc.toFixed(1) + '%';
+          // Fluctuate inference time
+          const rInf = Math.floor(8 + Math.random() * 6);
+          inferSpan.textContent = '~' + rInf + 'ms';
+
+          // Randomly flash status to "RETRAINING..." briefly
+          const statusEl = document.getElementById('analytics-status');
+          if (statusEl) {
+            if (Math.random() < 0.1) {
+              statusEl.textContent = "ENGINE ACTIVE: RETRAINING MODEL...";
+              statusEl.style.color = "var(--accent)";
+            } else {
+              statusEl.textContent = "ENGINE ACTIVE: CONTINUOUS LEARNING PIPELINE";
+              statusEl.style.color = "var(--green)";
+            }
+          }
+        }
 
         // Adaptive QoS Controllers
         const qos = data.qos;
