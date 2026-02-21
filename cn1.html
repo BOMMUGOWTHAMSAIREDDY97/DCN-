@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ML-Driven QoS Network Controller</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg: #030c12;
+      --panel: #061825;
+      --border: #0a4060;
+      --accent: #00d4ff;
+      --green: #00ff88;
+      --yellow: #ffb700;
+      --red: #ff3355;
+      --text: #c8e8f5;
+      --dim: #3a6a80;
+      --glow: 0 0 12px rgba(0, 212, 255, 0.4);
+      --glow-g: 0 0 12px rgba(0, 255, 136, 0.4);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Rajdhani', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: relative;
+      z-index: 10;
+      padding: 20px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(0, 50, 80, 0.5) 0%, transparent 100%);
+    }
+
+    .logo {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.3rem;
+      font-weight: 900;
+      color: var(--accent);
+      text-shadow: var(--glow);
+      letter-spacing: 2px;
+    }
+
+    .logo span {
+      color: var(--green);
+    }
+
+    .status-bar {
+      display: flex;
+      gap: 24px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--dim);
+    }
+
+    .status-bar .live {
+      color: var(--green);
+      animation: blink 1.5s infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.3
+      }
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-btn {
+      padding: 6px 16px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--dim);
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+
+    .nav-btn:hover,
+    .nav-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: var(--glow);
+      background: rgba(0, 212, 255, 0.05);
+    }
+
+    .view-section {
+      display: none;
+      position: relative;
+      z-index: 5;
+      padding: 30px 40px;
+      gap: 20px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .view-section.active-view {
+      display: grid;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    #view-dashboard {
+      grid-template-columns: 280px 1fr 280px;
+      grid-template-rows: auto auto auto;
+    }
+
+    #view-analytics,
+    #view-config,
+    #view-logs {
+      grid-template-columns: 1fr;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.6;
+    }
+
+    .panel-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--border), transparent);
+    }
+
+    /* Traffic Sources Panel */
+    .traffic-sources {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .traffic-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(10, 64, 96, 0.5);
+    }
+
+    .traffic-item:last-child {
+      border: none;
+    }
+
+    .t-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .t-icon {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      color: var(--accent);
+    }
+
+    .t-bar-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+
+    .t-val {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--accent);
+    }
+
+    .t-bar {
+      width: 80px;
+      height: 4px;
+      background: rgba(10, 64, 96, 0.8);
+    }
+
+    .t-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      transition: width 1s;
+    }
+
+    /* Center - Main Flow */
+    .main-flow {
+      grid-column: 2;
+      grid-row: 1 / 4;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Monitoring Panel */
+    .monitoring-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 20px;
+      position: relative;
+    }
+
+    .monitoring-panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.6;
+    }
+
+    .metrics-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .metric-box {
+      border: 1px solid var(--border);
+      padding: 12px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-val {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--green);
+      text-shadow: var(--glow-g);
+      display: block;
+    }
+
+    .metric-label {
+      font-size: 0.7rem;
+      color: var(--dim);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .metric-unit {
+      font-size: 0.75rem;
+      color: var(--dim);
+    }
+
+    /* ML Predictor */
+    .ml-panel {
+      background: linear-gradient(135deg, #041520, #061c10);
+      border: 1px solid #0a5030;
+      padding: 20px;
+      position: relative;
+    }
+
+    .ml-panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--green), transparent);
+    }
+
+    .congestion-states {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .state {
+      flex: 1;
+      padding: 12px 8px;
+      text-align: center;
+      border: 1px solid transparent;
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+    }
+
+    .state-low {
+      border-color: rgba(0, 255, 136, 0.3);
+      color: var(--green);
+      background: rgba(0, 255, 136, 0.05);
+    }
+
+    .state-med {
+      border-color: rgba(255, 183, 0, 0.3);
+      color: var(--yellow);
+      background: rgba(255, 183, 0, 0.05);
+    }
+
+    .state-high {
+      border-color: rgba(255, 51, 85, 0.3);
+      color: var(--red);
+      background: rgba(255, 51, 85, 0.05);
+    }
+
+    .state.active-state {
+      border-width: 2px;
+    }
+
+    .state-low.active-state {
+      background: rgba(0, 255, 136, 0.15);
+      box-shadow: 0 0 16px rgba(0, 255, 136, 0.3);
+    }
+
+    .state-med.active-state {
+      background: rgba(255, 183, 0, 0.15);
+      box-shadow: 0 0 16px rgba(255, 183, 0, 0.3);
+    }
+
+    .state-high.active-state {
+      background: rgba(255, 51, 85, 0.15);
+      box-shadow: 0 0 16px rgba(255, 51, 85, 0.3);
+    }
+
+    .state-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin: 0 auto 6px;
+    }
+
+    .state-low .state-indicator {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    .state-med .state-indicator {
+      background: var(--yellow);
+      box-shadow: 0 0 8px var(--yellow);
+    }
+
+    .state-high .state-indicator {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+    }
+
+    /* QoS Controller */
+    .qos-panel {
+      background: linear-gradient(135deg, #041520, #071025);
+      border: 1px solid #082040;
+      padding: 20px;
+      position: relative;
+    }
+
+    .qos-panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #6060ff, transparent);
+    }
+
+    .qos-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .qos-sub {
+      border: 1px solid var(--border);
+      padding: 12px;
+    }
+
+    .qos-sub-title {
+      font-size: 0.7rem;
+      color: var(--dim);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .queue-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 0.8rem;
+    }
+
+    .q-num {
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--accent);
+      width: 16px;
+    }
+
+    .q-bar-bg {
+      flex: 1;
+      height: 6px;
+      background: rgba(10, 64, 96, 0.5);
+    }
+
+    .q-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #4080ff, var(--accent));
+    }
+
+    .bw-item {
+      margin-bottom: 8px;
+    }
+
+    .bw-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--dim);
+      margin-bottom: 4px;
+    }
+
+    .bw-val {
+      color: var(--accent);
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    .bw-bar-bg {
+      height: 6px;
+      background: rgba(10, 64, 96, 0.5);
+    }
+
+    .bw-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4080ff, var(--green));
+    }
+
+    /* Performance Panel */
+    .perf-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 20px;
+      position: relative;
+    }
+
+    .perf-panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--yellow), transparent);
+    }
+
+    .perf-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+
+    .perf-box {
+      border: 1px solid var(--border);
+      padding: 12px;
+      text-align: center;
+    }
+
+    .perf-icon {
+      font-size: 1.4rem;
+      margin-bottom: 6px;
+    }
+
+    .perf-val {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.2rem;
+      font-weight: 700;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .perf-label {
+      font-size: 0.7rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Mini chart canvas */
+    canvas.sparkline {
+      width: 100%;
+      height: 60px;
+      display: block;
+      margin-top: 10px;
+    }
+
+    /* Right panels */
+    .right-col {
+      grid-column: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .feature-panel {
+      grid-column: 1;
+      grid-row: 2 / 4;
+    }
+
+    .alert-feed {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 20px;
+      flex: 1;
+    }
+
+    .alert-feed::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--red), transparent);
+    }
+
+    .alert-feed {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .alert-list {
+      max-height: 200px;
+      overflow: hidden;
+    }
+
+    .alert-item {
+      display: flex;
+      gap: 10px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(10, 64, 96, 0.3);
+      font-size: 0.75rem;
+      font-family: 'Share Tech Mono', monospace;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    .alert-time {
+      color: var(--dim);
+      white-space: nowrap;
+    }
+
+    .alert-msg {
+      color: var(--text);
+    }
+
+    .alert-msg.warn {
+      color: var(--yellow);
+    }
+
+    .alert-msg.crit {
+      color: var(--red);
+    }
+
+    .alert-msg.ok {
+      color: var(--green);
+    }
+
+    /* Bottleneck router */
+    .router-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 20px;
+      position: relative;
+    }
+
+    .router-panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+
+    .router-viz {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .router-node {
+      width: 50px;
+      height: 50px;
+      border: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      position: relative;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 8px rgba(0, 212, 255, 0.3)
+      }
+
+      50% {
+        box-shadow: 0 0 20px rgba(0, 212, 255, 0.7)
+      }
+    }
+
+    .link-line {
+      height: 2px;
+      width: 20px;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      position: relative;
+      overflow: hidden;
+    }
+
+    .link-line::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, white, transparent);
+      animation: flow 1.5s linear infinite;
+    }
+
+    @keyframes flow {
+      to {
+        left: 100%;
+      }
+    }
+
+    .utilization-wrap {
+      margin-top: 14px;
+    }
+
+    .util-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      margin-bottom: 6px;
+    }
+
+    .util-label {
+      color: var(--dim);
+    }
+
+    .util-val {
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--accent);
+    }
+
+    .util-bar-bg {
+      height: 8px;
+      background: rgba(10, 64, 96, 0.5);
+      margin-bottom: 10px;
+    }
+
+    .util-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      position: relative;
+      transition: width 1.5s;
+    }
+
+    /* Connector arrows */
+    .connector {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--accent);
+      font-size: 1.2rem;
+      opacity: 0.6;
+      padding: 4px 0;
+    }
+
+    /* Feedback arrow indicator */
+    .feedback-badge {
+      position: absolute;
+      right: -8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.65rem;
+      color: var(--dim);
+      writing-mode: vertical-rl;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* Chart section */
+    .chart-section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 20px;
+      position: relative;
+      grid-column: 1 / 4;
+    }
+
+    .chart-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--green), transparent);
+    }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-top: 4px;
+    }
+
+    .chart-box {
+      position: relative;
+    }
+
+    .chart-box-title {
+      font-size: 0.7rem;
+      color: var(--dim);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    canvas.linechart {
+      width: 100%;
+      height: 80px;
+    }
+
+    footer {
+      position: relative;
+      z-index: 5;
+      padding: 16px 40px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--dim);
+    }
+
+    /* Responsive */
+    @media(max-width:1100px) {
+      #view-dashboard {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .main-flow {
+        grid-column: 1 / 3;
+      }
+
+      .right-col {
+        grid-column: 1 / 3;
+        flex-direction: row;
+      }
+
+      .feature-panel {
+        display: none;
+      }
+    }
+
+    /* Feature list */
+    .feature-list {
+      margin-top: 4px;
+    }
+
+    .feat-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(10, 64, 96, 0.3);
+      font-size: 0.85rem;
+    }
+
+    .feat-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+      box-shadow: 0 0 6px var(--accent);
+    }
+
+    .feat-val {
+      margin-left: auto;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent);
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <div class="logo">DCN<span>PROJECT</span></div>
+    <div class="status-bar">
+      <span>SYS: <span class="live">● ONLINE</span></span>
+      <span>NODES: 24</span>
+      <span>UPTIME: 99.97%</span>
+      <span id="clock">00:00:00</span>
+    </div>
+    <div class="nav">
+      <button class="nav-btn active" data-target="view-dashboard">Dashboard</button>
+      <button class="nav-btn" data-target="view-analytics">Analytics</button>
+      <button class="nav-btn" data-target="view-config">Config</button>
+      <button class="nav-btn" data-target="view-logs">Logs</button>
+    </div>
+  </header>
+
+  <main id="view-dashboard" class="view-section active-view">
+    <!-- Left: Traffic Sources -->
+    <div class="panel traffic-sources">
+      <div class="panel-title">Traffic Sources</div>
+      <div class="traffic-item">
+        <div class="t-label">
+          <div class="t-icon">📞</div>
+          VoIP
+        </div>
+        <div class="t-bar-wrap">
+          <span class="t-val" id="voip-val">142 Kbps</span>
+          <div class="t-bar">
+            <div class="t-fill" id="voip-bar" style="width:35%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="traffic-item">
+        <div class="t-label">
+          <div class="t-icon">🌐</div>
+          HTTP
+        </div>
+        <div class="t-bar-wrap">
+          <span class="t-val" id="http-val">4.7 Mbps</span>
+          <div class="t-bar">
+            <div class="t-fill" id="http-bar" style="width:72%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="traffic-item">
+        <div class="t-label">
+          <div class="t-icon">📁</div>
+          FTP
+        </div>
+        <div class="t-bar-wrap">
+          <span class="t-val" id="ftp-val">2.1 Mbps</span>
+          <div class="t-bar">
+            <div class="t-fill" id="ftp-bar" style="width:52%"></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <div style="font-size:0.7rem;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">
+          Aggregate Load</div>
+        <canvas id="trafficChart" class="sparkline"></canvas>
+      </div>
+    </div>
+
+    <!-- Center: Main Pipeline -->
+    <div class="main-flow">
+      <!-- Traffic Monitoring -->
+      <div class="monitoring-panel">
+        <div class="panel-title">⬢ Traffic Monitoring</div>
+        <div class="metrics-row">
+          <div class="metric-box">
+            <span class="metric-val" id="arrival-rate">847</span>
+            <span class="metric-unit">pkt/s</span>
+            <div class="metric-label">Arrival Rate</div>
+          </div>
+          <div class="metric-box">
+            <span class="metric-val" id="delay-val">12.4</span>
+            <span class="metric-unit">ms</span>
+            <div class="metric-label">Delay</div>
+          </div>
+          <div class="metric-box">
+            <span class="metric-val" id="queue-val">234</span>
+            <span class="metric-unit">pkts</span>
+            <div class="metric-label">Queue Length</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">▼</div>
+
+      <!-- Feature Extraction -->
+      <div class="panel" style="padding:14px 20px;">
+        <div class="panel-title">⬡ Feature Extraction</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <span
+            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">jitter</span>
+          <span
+            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">throughput</span>
+          <span
+            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">loss_rate</span>
+          <span
+            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">rtt</span>
+          <span
+            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">burstiness</span>
+          <span
+            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--accent);font-family:'Share Tech Mono',monospace;">→
+            vector[12]</span>
+        </div>
+      </div>
+
+      <div class="connector">▼</div>
+
+      <!-- ML Predictor -->
+      <div class="ml-panel">
+        <div class="panel-title" style="color:var(--green);">◈ ML Congestion Predictor</div>
+        <div style="font-size:0.75rem;color:var(--dim);margin-bottom:10px;font-family:'Share Tech Mono',monospace;">
+          Model: Random Forest · Accuracy: <span style="color:var(--green);">96.8%</span> · Last inference: <span
+            id="infer-time">12ms</span>
+        </div>
+        <div class="congestion-states">
+          <div class="state state-low active-state" id="state-low">
+            <div class="state-indicator"></div>
+            Low
+          </div>
+          <div class="state state-med" id="state-med">
+            <div class="state-indicator"></div>
+            Medium
+          </div>
+          <div class="state state-high" id="state-high">
+            <div class="state-indicator"></div>
+            High
+          </div>
+        </div>
+        <div style="margin-top:12px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">
+          Confidence: <span style="color:var(--green);" id="confidence">94.2%</span> &nbsp;|&nbsp; Prediction horizon:
+          5s
+        </div>
+      </div>
+
+      <div class="connector">▼</div>
+
+      <!-- Adaptive QoS Controller -->
+      <div class="qos-panel">
+        <div class="panel-title" style="color:#8888ff;">⬡ Adaptive QoS Controller</div>
+        <div class="qos-grid">
+          <div class="qos-sub">
+            <div class="qos-sub-title">Priority Queuing</div>
+            <div class="queue-row">
+              <span class="q-num">1</span>
+              <div class="q-bar-bg">
+                <div class="q-bar" id="q1" style="width:85%"></div>
+              </div>
+              <span style="font-size:0.7rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">VoIP</span>
+            </div>
+            <div class="queue-row">
+              <span class="q-num">2</span>
+              <div class="q-bar-bg">
+                <div class="q-bar" id="q2" style="width:60%"></div>
+              </div>
+              <span style="font-size:0.7rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">HTTP</span>
+            </div>
+            <div class="queue-row">
+              <span class="q-num">3</span>
+              <div class="q-bar-bg">
+                <div class="q-bar" id="q3" style="width:40%"></div>
+              </div>
+              <span style="font-size:0.7rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">FTP</span>
+            </div>
+          </div>
+          <div class="qos-sub">
+            <div class="qos-sub-title">Bandwidth Allocation</div>
+            <div class="bw-item">
+              <div class="bw-label"><span>VoIP</span><span class="bw-val" id="bw1">40%</span></div>
+              <div class="bw-bar-bg">
+                <div class="bw-fill" id="bwf1" style="width:40%"></div>
+              </div>
+            </div>
+            <div class="bw-item">
+              <div class="bw-label"><span>HTTP</span><span class="bw-val" id="bw2">35%</span></div>
+              <div class="bw-bar-bg">
+                <div class="bw-fill" id="bwf2" style="width:35%"></div>
+              </div>
+            </div>
+            <div class="bw-item">
+              <div class="bw-label"><span>FTP</span><span class="bw-val" id="bw3">25%</span></div>
+              <div class="bw-bar-bg">
+                <div class="bw-fill" id="bwf3" style="width:25%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">▼</div>
+
+      <!-- Bottleneck Router -->
+      <div class="router-panel">
+        <div class="panel-title">◈ Bottleneck Router / Link</div>
+        <div class="router-viz">
+          <div class="router-node">🖥</div>
+          <div class="link-line"></div>
+          <div class="router-node" style="border-color:var(--yellow);animation-name:pulse-y;">⬡</div>
+          <div class="link-line"></div>
+          <div class="router-node">🖥</div>
+        </div>
+        <div class="utilization-wrap">
+          <div class="util-row"><span class="util-label">Link Utilization</span><span class="util-val"
+              id="link-util">67%</span></div>
+          <div class="util-bar-bg">
+            <div class="util-fill" id="link-fill" style="width:67%"></div>
+          </div>
+          <div class="util-row"><span class="util-label">Queue Occupancy</span><span class="util-val"
+              id="queue-occ">43%</span></div>
+          <div class="util-bar-bg">
+            <div class="util-fill" id="queue-fill"
+              style="width:43%;background:linear-gradient(90deg,#8888ff,var(--accent));"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">▼</div>
+
+      <!-- Performance Analyzer -->
+      <div class="perf-panel">
+        <div class="panel-title" style="color:var(--yellow);">◉ Performance Analyzer</div>
+        <div class="perf-metrics">
+          <div class="perf-box">
+            <div class="perf-icon">⏱</div>
+            <span class="perf-val" id="perf-delay" style="color:var(--green);">12.4 ms</span>
+            <div class="perf-label">Delay</div>
+          </div>
+          <div class="perf-box">
+            <div class="perf-icon">📈</div>
+            <span class="perf-val" id="perf-tput" style="color:var(--accent);">4.7 Gbps</span>
+            <div class="perf-label">Throughput</div>
+          </div>
+          <div class="perf-box">
+            <div class="perf-icon">📦</div>
+            <span class="perf-val" id="perf-loss" style="color:var(--yellow);">0.12%</span>
+            <div class="perf-label">Packet Loss</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column -->
+    <div class="right-col">
+      <!-- Alert Feed -->
+      <div class="alert-feed panel">
+        <div class="panel-title" style="color:var(--red);">⬡ Event Log</div>
+        <div class="alert-list" id="alert-list">
+          <div class="alert-item"><span class="alert-time">08:14:02</span><span class="alert-msg ok">QoS policy updated
+              — Low congestion</span></div>
+          <div class="alert-item"><span class="alert-time">08:13:47</span><span class="alert-msg">Feature vector
+              extracted successfully</span></div>
+          <div class="alert-item"><span class="alert-time">08:13:31</span><span class="alert-msg warn">Queue depth
+              approaching threshold</span></div>
+          <div class="alert-item"><span class="alert-time">08:13:10</span><span class="alert-msg">Bandwidth reallocated
+              — HTTP +5%</span></div>
+          <div class="alert-item"><span class="alert-time">08:12:55</span><span class="alert-msg crit">High congestion
+              predicted — action taken</span></div>
+          <div class="alert-item"><span class="alert-time">08:12:30</span><span class="alert-msg">ML model inference:
+              11ms</span></div>
+        </div>
+      </div>
+
+      <!-- Model Stats -->
+      <div class="panel">
+        <div class="panel-title" style="color:var(--green);">Model Stats</div>
+        <div style="font-size:0.75rem;font-family:'Share Tech Mono',monospace;">
+          <div
+            style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);color:var(--dim);">
+            <span>Algorithm</span><span style="color:var(--accent);">Random Forest</span>
+          </div>
+          <div
+            style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);color:var(--dim);">
+            <span>Accuracy</span><span style="color:var(--green);">96.8%</span>
+          </div>
+          <div
+            style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);color:var(--dim);">
+            <span>Precision</span><span style="color:var(--green);">95.3%</span>
+          </div>
+          <div
+            style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);color:var(--dim);">
+            <span>Recall</span><span style="color:var(--green);">97.1%</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;color:var(--dim);">
+            <span>F1 Score</span><span style="color:var(--green);">0.962</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feedback note -->
+      <div class="panel" style="border-color:rgba(0,212,255,0.2);">
+        <div class="panel-title">Feedback Loop</div>
+        <div style="font-size:0.8rem;color:var(--dim);line-height:1.6;">
+          Performance metrics feed back into <span style="color:var(--accent);">Traffic Monitoring</span> to
+          continuously retrain and adapt the <span style="color:var(--green);">ML Congestion Predictor</span> in
+          real-time.
+        </div>
+        <div
+          style="margin-top:12px;display:flex;align-items:center;gap:8px;font-size:0.7rem;font-family:'Share Tech Mono',monospace;color:var(--dim);">
+          <span style="color:var(--green);">●</span> Feedback active &nbsp; <span style="color:var(--accent);">↺</span>
+          Cycle: 5s
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Charts -->
+    <div class="chart-section" style="grid-row:3;grid-column:1/3">
+      <div class="panel-title" style="color:var(--green);">◈ Real-Time Performance Metrics</div>
+      <div class="chart-row">
+        <div class="chart-box">
+          <div class="chart-box-title">Delay (ms)</div>
+          <canvas id="delayChart" class="linechart"></canvas>
+        </div>
+        <div class="chart-box">
+          <div class="chart-box-title">Throughput (Mbps)</div>
+          <canvas id="tputChart" class="linechart"></canvas>
+        </div>
+        <div class="chart-box">
+          <div class="chart-box-title">Packet Loss (%)</div>
+          <canvas id="lossChart" class="linechart"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <main id="view-analytics" class="view-section">
+    <div class="panel">
+      <div class="panel-title">Analytics Engine</div>
+      <div style="padding: 40px; text-align: center; color: var(--dim);">
+        <h2>Advanced Network Analytics</h2>
+        <p style="margin-top: 10px;">Historical data parsing and predictive model training interface.</p>
+        <div style="margin-top: 50px; display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;">
+          <div class="perf-box" style="width: 250px;">
+            <div class="perf-icon">🧠</div>
+            <span class="perf-val">Random Forest</span>
+            <div class="perf-label">Active Classifier</div>
+          </div>
+          <div class="perf-box" style="width: 250px;">
+            <div class="perf-icon" style="color:var(--green);">🎯</div>
+            <span class="perf-val" style="color:var(--green);">96.8%</span>
+            <div class="perf-label">Validation Accuracy</div>
+          </div>
+          <div class="perf-box" style="width: 250px;">
+            <div class="perf-icon" style="color:var(--accent);">⏱</div>
+            <span class="perf-val" style="color:var(--accent);">~11ms</span>
+            <div class="perf-label">Average Inference Time</div>
+          </div>
+        </div>
+        <div
+          style="margin-top: 40px; text-align: center; font-size: 0.8rem; color: var(--dim); padding: 20px; border: 1px dashed var(--border);">
+          <p>A simulated Machine Learning component analyzes load in real-time derived from Traffic Flow volume.</p>
+          <p style="margin-top: 8px;">Because this is an active simulation loop, the metrics naturally build and release
+            congestion states dynamically via the API.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <main id="view-config" class="view-section">
+    <div class="panel">
+      <div class="panel-title">QoS Policy Configuration</div>
+      <div style="padding: 20px 40px; color: var(--text);">
+        <h3 style="color: var(--accent); margin-bottom: 30px;">Traffic Shaping Rules</h3>
+        <div style="display:flex; flex-direction:column; gap:25px; max-width: 500px;">
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(10,64,96,0.3); padding-bottom: 10px;">
+            <div style="display: flex; flex-direction: column;">
+              <label style="font-weight: 600;">VoIP Protection Allocation</label>
+              <span style="font-size: 0.7rem; color: var(--dim); margin-top: 4px;">Guaranteed bandwidth percentage
+                during High Congestion</span>
+            </div>
+            <input type="range" min="10" max="80" value="50" style="width: 150px;">
+          </div>
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(10,64,96,0.3); padding-bottom: 10px;">
+            <div style="display: flex; flex-direction: column;">
+              <label style="font-weight: 600;">Congestion Threshold Warning</label>
+              <span style="font-size: 0.7rem; color: var(--dim); margin-top: 4px;">Trigger level for transitioning to
+                Medium congestion</span>
+            </div>
+            <input type="range" min="0" max="1" step="0.05" value="0.4" style="width: 150px;">
+          </div>
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(10,64,96,0.3); padding-bottom: 10px;">
+            <div style="display: flex; flex-direction: column;">
+              <label style="font-weight: 600;">Default FTP Priority Class</label>
+              <span style="font-size: 0.7rem; color: var(--dim); margin-top: 4px;">How non-real-time file transfers are
+                queued globally</span>
+            </div>
+            <select
+              style="background:var(--bg); color:var(--text); border:1px solid var(--accent); padding:6px 10px; width: 150px; font-family: 'Rajdhani', sans-serif;">
+              <option>Low (Scavenger)</option>
+              <option selected>Standard (Best Effort)</option>
+              <option>High (Expedited)</option>
+            </select>
+          </div>
+
+          <div style="margin-top: 20px; display: flex; gap: 15px;">
+            <button class="nav-btn" style="flex: 1;"
+              onclick="alert('Configuration parameters saved successfully.')">Apply Policy</button>
+            <button class="nav-btn" style="border-color: var(--dim); color: var(--dim);">Reset Defaults</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <main id="view-logs" class="view-section">
+    <div class="panel" style="height: 60vh; overflow-y: auto;">
+      <div class="panel-title">System Event Logs</div>
+      <div id="full-log-list" style="font-family: 'Share Tech Mono', monospace; font-size: 0.85rem; line-height: 1.8;">
+        <div class="alert-item" style="border-bottom: 1px solid rgba(10,64,96,0.3); padding: 8px 0;"><span
+            class="alert-time" style="color:var(--dim); width: 80px; display:inline-block;">SYSTEM</span><span
+            class="alert-msg">Logging engine initialized... awaiting network events from backend.</span></div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span>DCN PROJECT v2.4.1</span>
+    <span>© 2026 DCN Project — Adaptive Intelligence for Next-Gen Networks</span>
+    <span id="footer-time">SYS TIME: --:--:--</span>
+  </footer>
+
+  <script>
+    // Clock
+    function updateClock() {
+      const now = new Date();
+      const t = now.toTimeString().slice(0, 8);
+      document.getElementById('clock').textContent = t;
+      document.getElementById('footer-time').textContent = 'SYS TIME: ' + t;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Chart utility
+    function drawSparkline(canvas, data, color, fill) {
+      const ctx = canvas.getContext('2d');
+      const W = canvas.offsetWidth || 200;
+      const H = canvas.offsetHeight || 60;
+      canvas.width = W * devicePixelRatio;
+      canvas.height = H * devicePixelRatio;
+      ctx.scale(devicePixelRatio, devicePixelRatio);
+      ctx.clearRect(0, 0, W, H);
+      const min = Math.min(...data), max = Math.max(...data);
+      const range = max - min || 1;
+      const pts = data.map((v, i) => [i / (data.length - 1) * W, H - ((v - min) / range * (H - 10) + 5)]);
+      if (fill) {
+        ctx.beginPath();
+        ctx.moveTo(pts[0][0], H);
+        pts.forEach(p => ctx.lineTo(p[0], p[1]));
+        ctx.lineTo(pts[pts.length - 1][0], H);
+        ctx.closePath();
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, color + '44');
+        grad.addColorStop(1, color + '00');
+        ctx.fillStyle = grad;
+        ctx.fill();
+      }
+      ctx.beginPath();
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // latest dot
+      const last = pts[pts.length - 1];
+      ctx.beginPath();
+      ctx.arc(last[0], last[1], 3, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    // Data stores
+    const N = 40;
+    let delayData = Array.from({ length: N }, () => 10 + Math.random() * 8);
+    let tputData = Array.from({ length: N }, () => 4 + Math.random() * 1.5);
+    let lossData = Array.from({ length: N }, () => 0.05 + Math.random() * 0.15);
+    let trafficData = Array.from({ length: N }, () => 50 + Math.random() * 30);
+
+    // API Data Poll
+    async function fetchState() {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/status');
+        const data = await res.json();
+
+        // Update Charts Data
+        delayData.push(data.performance.delay); delayData.shift();
+        tputData.push(data.performance.throughput); tputData.shift();
+        lossData.push(data.performance.packet_loss); lossData.shift();
+        trafficData.push(data.traffic.aggregate); trafficData.shift();
+
+        drawSparkline(document.getElementById('delayChart'), delayData, '#00ff88', true);
+        drawSparkline(document.getElementById('tputChart'), tputData, '#00d4ff', true);
+        drawSparkline(document.getElementById('lossChart'), lossData, '#ffb700', true);
+        drawSparkline(document.getElementById('trafficChart'), trafficData, '#00d4ff', true);
+
+        // Performance Values
+        document.getElementById('delay-val').textContent = data.monitoring.delay.toFixed(1);
+        document.getElementById('perf-delay').textContent = data.performance.delay.toFixed(1) + ' ms';
+        document.getElementById('perf-tput').textContent = data.performance.throughput.toFixed(2) + ' Gbps';
+        document.getElementById('perf-loss').textContent = data.performance.packet_loss.toFixed(2) + '%';
+
+        // Traffic Sources
+        document.getElementById('voip-val').textContent = data.traffic.voip + ' Kbps';
+        document.getElementById('voip-bar').style.width = Math.min(100, (data.traffic.voip / 200 * 100)) + '%';
+        document.getElementById('http-val').textContent = data.traffic.http.toFixed(1) + ' Mbps';
+        document.getElementById('http-bar').style.width = Math.min(100, (data.traffic.http / 12 * 100)) + '%';
+        document.getElementById('ftp-val').textContent = data.traffic.ftp.toFixed(1) + ' Mbps';
+        document.getElementById('ftp-bar').style.width = Math.min(100, (data.traffic.ftp / 5 * 100)) + '%';
+
+        // Monitoring
+        document.getElementById('arrival-rate').textContent = data.monitoring.arrival_rate;
+        document.getElementById('queue-val').textContent = data.monitoring.queue_length;
+
+        // ML Predictor
+        ['low', 'med', 'high'].forEach(s => {
+          document.getElementById('state-' + s).classList.toggle('active-state', s === data.ml.state);
+        });
+        document.getElementById('confidence').textContent = data.ml.confidence + '%';
+        document.getElementById('infer-time').textContent = data.ml.infer_time + 'ms';
+
+        // Adaptive QoS Controllers
+        const qos = data.qos;
+        document.getElementById('q1').style.width = qos.queues.voip + '%';
+        document.getElementById('q2').style.width = qos.queues.http + '%';
+        document.getElementById('q3').style.width = qos.queues.ftp + '%';
+        document.getElementById('bw1').textContent = qos.bandwidth.voip + '%';
+        document.getElementById('bwf1').style.width = qos.bandwidth.voip + '%';
+        document.getElementById('bw2').textContent = qos.bandwidth.http + '%';
+        document.getElementById('bwf2').style.width = qos.bandwidth.http + '%';
+        document.getElementById('bw3').textContent = qos.bandwidth.ftp + '%';
+        document.getElementById('bwf3').style.width = qos.bandwidth.ftp + '%';
+
+        // Router Utilization
+        document.getElementById('link-util').textContent = data.router.link_utilization + '%';
+        document.getElementById('link-fill').style.width = data.router.link_utilization + '%';
+        document.getElementById('queue-occ').textContent = data.router.queue_occupancy + '%';
+        document.getElementById('queue-fill').style.width = data.router.queue_occupancy + '%';
+
+        // Alerts
+        if (data.alerts && data.alerts.length > 0) {
+          const list = document.getElementById('alert-list');
+          const fullList = document.getElementById('full-log-list');
+          data.alerts.forEach(msg => {
+            const item = document.createElement('div');
+            item.className = 'alert-item';
+            item.innerHTML = `<span class="alert-time" style="width:80px; display:inline-block; color:var(--dim);">${msg.time}</span><span class="alert-msg ${msg.cls}">${msg.msg}</span>`;
+            list.insertBefore(item, list.firstChild);
+            if (list.children.length > 8) list.removeChild(list.lastChild);
+
+            if (fullList) {
+              const logItem = document.createElement('div');
+              logItem.className = 'alert-item';
+              logItem.style.borderBottom = '1px solid rgba(10,64,96,0.3)';
+              logItem.style.padding = '8px 0';
+              logItem.innerHTML = item.innerHTML;
+              fullList.insertBefore(logItem, fullList.firstChild);
+              if (fullList.children.length > 200) fullList.removeChild(fullList.lastChild);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn("Backend not connected:", e);
+      }
+    }
+
+    // Init polling
+    window.addEventListener('load', () => {
+      setInterval(fetchState, 2000);
+      fetchState();
+    });
+
+    // Nav tab interaction
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', function () {
+        const targetId = this.getAttribute('data-target');
+        if (!targetId) return; // Ignore buttons without targets
+
+        // Update active tab Button
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+
+        // Update active View
+        document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active-view'));
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) targetEl.classList.add('active-view');
+      });
+    });
+  </script>
+</body>
+
+</html>
