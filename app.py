@@ -48,7 +48,7 @@ class NetworkState:
         # Queue length builds up when load is high
         queue_length = int(max(0, (total_load - 5.0) * 50 + random.uniform(0, 20)))
         
-        # 3. ML Congestion Predictor (Simulated Logic)
+        # 3. ML for Traffic Analysis (Simulated Logic)
         confidence = round(random.uniform(85.0, 98.0), 1)
         infer_time = random.randint(5, 15)
         
