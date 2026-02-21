@@ -915,7 +915,8 @@
     <!-- Left: Traffic Sources -->
     <div class="panel traffic-sources">
       <div class="panel-title">Traffic Sources</div>
-      <div class="traffic-item">
+      <div class="traffic-item" style="cursor: pointer; border-bottom: none; padding-bottom: 5px;"
+        onclick="document.getElementById('voip-details').style.display = document.getElementById('voip-details').style.display === 'none' ? 'block' : 'none'">
         <div class="t-label">
           <div class="t-icon">📞</div>
           VoIP
@@ -927,7 +928,16 @@
           </div>
         </div>
       </div>
-      <div class="traffic-item">
+      <div id="voip-details"
+        style="display: none; padding-left: 46px; border-bottom: 1px solid rgba(10, 64, 96, 0.5); font-size: 0.75rem; color: var(--dim); padding-bottom: 10px; font-family: 'Share Tech Mono', monospace;">
+        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>Enterprise SIP
+            Trunk</span><span style="color:var(--accent);">~80%</span></div>
+        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>WebRTC Audio</span><span
+            style="color:var(--accent);">~20%</span></div>
+      </div>
+
+      <div class="traffic-item" style="cursor: pointer; border-bottom: none; padding-bottom: 5px;"
+        onclick="document.getElementById('http-details').style.display = document.getElementById('http-details').style.display === 'none' ? 'block' : 'none'">
         <div class="t-label">
           <div class="t-icon">🌐</div>
           HTTP
@@ -939,7 +949,20 @@
           </div>
         </div>
       </div>
-      <div class="traffic-item">
+      <div id="http-details"
+        style="display: none; padding-left: 46px; border-bottom: 1px solid rgba(10, 64, 96, 0.5); font-size: 0.75rem; color: var(--dim); padding-bottom: 10px; font-family: 'Share Tech Mono', monospace;">
+        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>Edu:
+            Canvas/Coursera</span><span style="color:var(--green);">High Prio</span></div>
+        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>Ent:
+            Netflix/TikTok</span><span style="color:var(--red);">Throttled</span></div>
+        <div style="margin-top: 6px; font-size: 0.65rem; color: var(--accent);"><a href="#"
+            onclick="document.querySelector('[data-target=\'view-analytics\']').click(); return false;"
+            style="color: var(--accent); text-decoration: underline;">See Analytics Tab for full Deep Packet
+            Inspection</a></div>
+      </div>
+
+      <div class="traffic-item" style="cursor: pointer; border-bottom: none; padding-bottom: 5px;"
+        onclick="document.getElementById('ftp-details').style.display = document.getElementById('ftp-details').style.display === 'none' ? 'block' : 'none'">
         <div class="t-label">
           <div class="t-icon">📁</div>
           FTP
@@ -950,6 +973,13 @@
             <div class="t-fill" id="ftp-bar" style="width:52%"></div>
           </div>
         </div>
+      </div>
+      <div id="ftp-details"
+        style="display: none; padding-left: 46px; font-size: 0.75rem; color: var(--dim); font-family: 'Share Tech Mono', monospace;">
+        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>Steam Game
+            Updates</span><span style="color:var(--red);">Capped</span></div>
+        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>Background Cloud
+            Sync</span><span style="color:var(--yellow);">Scavenger</span></div>
       </div>
       <div style="margin-top:16px;">
         <div style="font-size:0.7rem;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">
