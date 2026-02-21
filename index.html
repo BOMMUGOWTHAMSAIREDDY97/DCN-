@@ -1261,6 +1261,96 @@
         </div>
       </div>
     </div>
+
+    <div class="panel" style="margin-top: 20px;">
+      <div class="panel-title" style="color: var(--accent);">⬡ Deep Packet Inspection: Application Flow Control</div>
+      <div style="padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+
+        <!-- Education (Full Access) -->
+        <div>
+          <h3
+            style="color: var(--green); margin-bottom: 20px; font-size: 1.1rem; display: flex; justify-content: space-between;">
+            <span>🎓 Educational (Priority: HIGH)</span>
+            <span style="font-family: 'Share Tech Mono', monospace; font-size: 0.85rem;">Status: FULL DATA</span>
+          </h3>
+
+          <div class="bw-item" style="margin-bottom: 16px;">
+            <div class="bw-label"><span style="color: var(--text);">Coursera / edX Video Streams</span><span
+                class="bw-val" id="app-edu1-val">45 Mbps</span></div>
+            <div class="bw-bar-bg" style="height: 10px; border-radius: 4px;">
+              <div class="bw-fill" id="app-edu1-bar"
+                style="width:85%; background: linear-gradient(90deg, var(--green), #00ffaa); border-radius: 4px;"></div>
+            </div>
+          </div>
+
+          <div class="bw-item" style="margin-bottom: 16px;">
+            <div class="bw-label"><span style="color: var(--text);">Wikipedia / Research Portals</span><span
+                class="bw-val" id="app-edu2-val">12 Mbps</span></div>
+            <div class="bw-bar-bg" style="height: 10px; border-radius: 4px;">
+              <div class="bw-fill" id="app-edu2-bar"
+                style="width:30%; background: linear-gradient(90deg, var(--green), #00ffaa); border-radius: 4px;"></div>
+            </div>
+          </div>
+
+          <div class="bw-item" style="margin-bottom: 16px;">
+            <div class="bw-label"><span style="color: var(--text);">University CMS (Canvas/Moodle)</span><span
+                class="bw-val" id="app-edu3-val">28 Mbps</span></div>
+            <div class="bw-bar-bg" style="height: 10px; border-radius: 4px;">
+              <div class="bw-fill" id="app-edu3-bar"
+                style="width:65%; background: linear-gradient(90deg, var(--green), #00ffaa); border-radius: 4px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Entertainment (Limited Access) -->
+        <div>
+          <h3
+            style="color: var(--yellow); margin-bottom: 20px; font-size: 1.1rem; display: flex; justify-content: space-between;">
+            <span>🎮 Entertainment (Priority: SCAVENGER)</span>
+            <span style="font-family: 'Share Tech Mono', monospace; font-size: 0.85rem; color: var(--red);">Status:
+              THROTTLED</span>
+          </h3>
+
+          <div class="bw-item" style="margin-bottom: 16px;">
+            <div class="bw-label"><span style="color: var(--text); opacity: 0.7;">Netflix / YouTube 4K</span><span
+                class="bw-val" id="app-ent1-val" style="color: var(--red);">5 Mbps (Capped)</span></div>
+            <div class="bw-bar-bg" style="height: 10px; border-radius: 4px; border: 1px dotted var(--red);">
+              <div class="bw-fill" id="app-ent1-bar"
+                style="width:15%; background: linear-gradient(90deg, var(--red), var(--yellow)); border-radius: 4px; transition: width 0.5s;">
+              </div>
+            </div>
+          </div>
+
+          <div class="bw-item" style="margin-bottom: 16px;">
+            <div class="bw-label"><span style="color: var(--text); opacity: 0.7;">TikTok / Instagram Reels</span><span
+                class="bw-val" id="app-ent2-val" style="color: var(--red);">2 Mbps (Capped)</span></div>
+            <div class="bw-bar-bg" style="height: 10px; border-radius: 4px; border: 1px dotted var(--red);">
+              <div class="bw-fill" id="app-ent2-bar"
+                style="width:8%; background: linear-gradient(90deg, var(--red), var(--yellow)); border-radius: 4px; transition: width 0.5s;">
+              </div>
+            </div>
+          </div>
+
+          <div class="bw-item" style="margin-bottom: 16px;">
+            <div class="bw-label"><span style="color: var(--text); opacity: 0.7;">Steam Game Downloads</span><span
+                class="bw-val" id="app-ent3-val" style="color: var(--red);">10 Mbps (Capped)</span></div>
+            <div class="bw-bar-bg" style="height: 10px; border-radius: 4px; border: 1px dotted var(--red);">
+              <div class="bw-fill" id="app-ent3-bar"
+                style="width:25%; background: linear-gradient(90deg, var(--red), var(--yellow)); border-radius: 4px; transition: width 0.5s;">
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div
+        style="padding: 0 20px 20px 20px; font-size: 0.75rem; color: var(--dim); font-family: 'Share Tech Mono', monospace; display: flex; gap: 20px;">
+        <span><strong style="color:var(--accent);">POLICY:</strong> Edu-Priority-V2</span>
+        <span><strong style="color:var(--accent);">DPI ENGINE:</strong> Active (Layer 7 Inspection)</span>
+        <span style="margin-left:auto;">System actively dropping entertainment UDP packets to preserve Quality of
+          Service for Educational platforms.</span>
+      </div>
+    </div>
   </main>
 
   <main id="view-config" class="view-section">
@@ -1581,6 +1671,45 @@
               statusEl.style.color = "var(--green)";
             }
           }
+        }
+
+        // Deep Packet Inspection App Animation
+        const edu1 = document.getElementById('app-edu1-bar');
+        const edu2 = document.getElementById('app-edu2-bar');
+        const edu3 = document.getElementById('app-edu3-bar');
+        const ent1 = document.getElementById('app-ent1-bar');
+        const ent2 = document.getElementById('app-ent2-bar');
+        const ent3 = document.getElementById('app-ent3-bar');
+
+        if (edu1) { // If panel exists
+          const e1 = 35 + Math.random() * 20;
+          const e2 = 5 + Math.random() * 15;
+          const e3 = 20 + Math.random() * 15;
+
+          document.getElementById('app-edu1-val').textContent = e1.toFixed(1) + ' Mbps';
+          document.getElementById('app-edu2-val').textContent = e2.toFixed(1) + ' Mbps';
+          document.getElementById('app-edu3-val').textContent = e3.toFixed(1) + ' Mbps';
+
+          edu1.style.width = Math.min(100, e1 / 60 * 100) + '%';
+          edu2.style.width = Math.min(100, e2 / 30 * 100) + '%';
+          edu3.style.width = Math.min(100, e3 / 40 * 100) + '%';
+
+          // Entertainment is heavily throttled under load
+          let throttleMultiplier = 1.0;
+          if (data.ml.state === "high") throttleMultiplier = 0.2;
+          else if (data.ml.state === "med") throttleMultiplier = 0.5;
+
+          const n1 = (2 + Math.random() * 8) * throttleMultiplier;
+          const n2 = (0.5 + Math.random() * 3) * throttleMultiplier;
+          const n3 = (1 + Math.random() * 12) * throttleMultiplier;
+
+          document.getElementById('app-ent1-val').textContent = n1.toFixed(1) + ' Mbps' + (throttleMultiplier < 1 ? ' (Capped)' : '');
+          document.getElementById('app-ent2-val').textContent = n2.toFixed(1) + ' Mbps' + (throttleMultiplier < 1 ? ' (Capped)' : '');
+          document.getElementById('app-ent3-val').textContent = n3.toFixed(1) + ' Mbps' + (throttleMultiplier < 1 ? ' (Capped)' : '');
+
+          ent1.style.width = Math.min(100, n1 / 20 * 100) + '%';
+          ent2.style.width = Math.min(100, n2 / 10 * 100) + '%';
+          ent3.style.width = Math.min(100, n3 / 25 * 100) + '%';
         }
 
         // Adaptive QoS Controllers
