@@ -1377,12 +1377,103 @@
     let lossData = Array.from({ length: N }, () => 0.05 + Math.random() * 0.15);
     let trafficData = Array.from({ length: N }, () => 50 + Math.random() * 30);
 
+    // Standalone Mock Generator
+    let phase = 0.0;
+    let lastUpdate = Date.now() / 1000;
+
+    function getMockState() {
+      const now = Date.now() / 1000;
+      const dt = now - lastUpdate;
+      phase += dt * 0.2;
+      lastUpdate = now;
+
+      const cycle = Math.sin(phase);
+      const randUniform = (min, max) => Math.random() * (max - min) + min;
+      const randInt = (min, max) => Math.floor(randUniform(min, max + 1));
+
+      const voip_kbps = Math.max(50, 120 + 40 * cycle + randUniform(-10, 10));
+      const http_mbps = Math.max(1.0, 4.0 + 3.0 * cycle + randUniform(-0.5, 0.5));
+      const ftp_mbps = Math.max(0.1, 2.0 + 1.0 * Math.sin(phase * 0.3) + randUniform(-0.5, 1.5));
+
+      const total_load = (voip_kbps / 1000.0) + http_mbps + ftp_mbps;
+      const arrival_rate = Math.floor(total_load * 120 + randUniform(-50, 50));
+
+      const capacity = 12.0;
+      const utilization_ratio = Math.min(0.99, total_load / capacity);
+      const base_delay = 5.0 / (1.0 - utilization_ratio) + randUniform(-2, 2);
+
+      const queue_length = Math.floor(Math.max(0, (total_load - 5.0) * 50 + randUniform(0, 20)));
+
+      const confidence = parseFloat(randUniform(85.0, 98.0).toFixed(1));
+      const infer_time = randInt(5, 15);
+
+      let state = "low";
+      if (utilization_ratio >= 0.75) state = "high";
+      else if (utilization_ratio >= 0.4) state = "med";
+
+      let bw_voip = 20, bw_http = 50, bw_ftp = 30;
+      let q_voip = 10, q_http = 30, q_ftp = 60;
+
+      if (state === "med") {
+        bw_voip = 30; bw_http = 45; bw_ftp = 25;
+        q_voip = 20; q_http = 40; q_ftp = 40;
+      } else if (state === "high") {
+        bw_voip = 50; bw_http = 35; bw_ftp = 15;
+        q_voip = 50; q_http = 30; q_ftp = 20;
+      }
+
+      const link_utilization = Math.min(100, Math.floor(utilization_ratio * 100));
+      const queue_occupancy = Math.min(100, Math.floor((queue_length / 500.0) * 100));
+
+      let final_delay = base_delay, packet_loss = randUniform(0.01, 0.05);
+      if (state === "high") {
+        final_delay = base_delay * 0.8;
+        packet_loss = 0.5 + (utilization_ratio - 0.75) * 5.0 + randUniform(0, 0.5);
+      } else if (state === "med") {
+        final_delay = base_delay * 0.9;
+        packet_loss = randUniform(0.05, 0.3);
+      }
+
+      const final_tput = total_load * (1.0 - packet_loss / 100.0);
+
+      const alerts = [];
+      const now_str = new Date().toTimeString().slice(0, 8);
+      if (utilization_ratio > 0.85) {
+        alerts.push({ time: now_str, msg: "Critical link utilization detected > 85%", cls: "crit" });
+      } else if (state === "high") {
+        alerts.push({ time: now_str, msg: `QoS active: VoIP bandwidth increased to ${bw_voip}%`, cls: "warn" });
+      } else if (state === "low" && Math.random() < 0.1) {
+        alerts.push({ time: now_str, msg: "Nominal traffic conditions - Policy reset", cls: "ok" });
+      }
+
+      if (packet_loss > 1.0) {
+        alerts.push({ time: now_str, msg: `Packet loss elevated (${packet_loss.toFixed(1)}%) on background queues`, cls: "warn" });
+      }
+
+      return {
+        traffic: { voip: Math.round(voip_kbps), http: parseFloat(http_mbps.toFixed(1)), ftp: parseFloat(ftp_mbps.toFixed(1)), aggregate: parseFloat(total_load.toFixed(1)) },
+        monitoring: { arrival_rate, delay: parseFloat(base_delay.toFixed(1)), queue_length },
+        ml: { state, confidence, infer_time },
+        qos: { bandwidth: { voip: bw_voip, http: bw_http, ftp: bw_ftp }, queues: { voip: q_voip, http: q_http, ftp: q_ftp } },
+        router: { link_utilization, queue_occupancy },
+        performance: { delay: parseFloat(final_delay.toFixed(1)), throughput: parseFloat(final_tput.toFixed(2)), packet_loss: parseFloat(packet_loss.toFixed(2)) },
+        alerts
+      };
+    }
+
     // API Data Poll
     async function fetchState() {
+      let data;
       try {
         const res = await fetch('http://127.0.0.1:5000/api/status');
-        const data = await res.json();
+        if (!res.ok) throw new Error("HTTP Request Failed");
+        data = await res.json();
+      } catch (e) {
+        // Fallback to standalone mode if backend is not running
+        data = getMockState();
+      }
 
+      try {
         // Update Charts Data
         delayData.push(data.performance.delay); delayData.shift();
         tputData.push(data.performance.throughput); tputData.shift();
@@ -1460,7 +1551,7 @@
           });
         }
       } catch (e) {
-        console.warn("Backend not connected:", e);
+        console.warn("Error processing data:", e);
       }
     }
 
