@@ -1002,23 +1002,41 @@
 
       <!-- Feature Extraction -->
       <div class="panel" style="padding:14px 20px;">
-        <div class="panel-title">⬡ Feature Extraction</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <div class="panel-title" style="display:flex; justify-content:space-between;">
+          <span>⬡ Feature Extraction</span>
+          <span
+            style="color:var(--green); font-size:0.7rem; border:1px solid var(--green); padding:2px 6px; border-radius:3px;">SYSTEM
+            ENABLED</span>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           <span class="feat-tag" id="feat-jitter">jitter</span>
           <span class="feat-tag" id="feat-tput">throughput</span>
           <span class="feat-tag" id="feat-loss">loss_rate</span>
           <span class="feat-tag" id="feat-rtt">rtt</span>
           <span class="feat-tag" id="feat-burst">burstiness</span>
-          <span
-            style="border:1px solid var(--accent);padding:4px 10px;font-size:0.75rem;color:var(--accent);font-family:'Share Tech Mono',monospace; min-width: 140px; text-align: center;">
-            <span id="extraction-status">COLLECTING</span> → <span id="feature-vector">[0.0, 0.0, 0.0, 0.0, 0.0]</span>
-          </span>
         </div>
+
+        <div
+          style="margin-top:15px; padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--border); font-family:'Share Tech Mono',monospace; font-size:0.8rem;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+            <span style="color:var(--dim);">Identified Flow:</span>
+            <span id="extraction-app" style="color:var(--accent);">ANALYZING...</span>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:var(--dim);">Raw Feature Vector:</span>
+            <span id="feature-vector" style="color:var(--green);">[0.0, 0.0, 0.0, 0.0, 0.0]</span>
+          </div>
+        </div>
+
         <div
           style="margin-top: 10px; background: rgba(0, 212, 255, 0.1); height: 2px; position: relative; overflow: hidden;">
           <div id="feature-progress"
-            style="position: absolute; height: 100%; width: 30%; background: var(--accent); left: -100%; transition: left 0.5s linear;">
+            style="position: absolute; height: 100%; width: 30%; background: var(--accent); left: -100%; transition: left 1.5s linear;">
           </div>
+        </div>
+        <div
+          style="margin-top:5px; text-align:right; font-size:0.65rem; color:var(--dim); font-family:'Share Tech Mono',monospace;">
+          STREAMS PIPELINE: <span id="extraction-status">COLLECTING</span>
         </div>
       </div>
 
@@ -1026,7 +1044,7 @@
 
       <!-- ML Predictor -->
       <div class="ml-panel">
-        <div class="panel-title" style="color:var(--green);">◈ ML for Traffic Network</div>
+        <div class="panel-title" style="color:var(--green);">◈ using ml for traffic network</div>
         <div style="font-size:0.75rem;color:var(--dim);margin-bottom:10px;font-family:'Share Tech Mono',monospace;">
           Model: Random Forest · Accuracy: <span style="color:var(--green);">96.8%</span> · Last inference: <span
             id="infer-time">12ms</span>
@@ -1664,12 +1682,16 @@
         const statusEl = document.getElementById('extraction-status');
         const vectorEl = document.getElementById('feature-vector');
         const progressEl = document.getElementById('feature-progress');
+        const appEl = document.getElementById('extraction-app');
         const tags = ['feat-jitter', 'feat-tput', 'feat-loss', 'feat-rtt', 'feat-burst'];
+        const mockApps = ['Coursera HD Stream', 'Wikipedia API', 'Netflix 4K Flow', 'TikTok Metadata', 'Canvas CMS Sync'];
 
-        if (statusEl && vectorEl && progressEl) {
+        if (statusEl && vectorEl && progressEl && appEl) {
           // Trigger animation cycle
           statusEl.textContent = "EXTRACTING";
           statusEl.style.color = "var(--accent)";
+          appEl.textContent = "ANALYZING FLOW...";
+          appEl.style.color = "var(--dim)";
 
           // Move progress bar
           progressEl.style.transition = "none";
@@ -1683,7 +1705,7 @@
           const vec = Array.from({ length: 5 }, () => Math.random().toFixed(2));
           vectorEl.textContent = `[${vec.join(', ')}]`;
 
-          // Highlight a random tag
+          // Highlight random tags
           tags.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.classList.remove('active-feat');
@@ -1693,8 +1715,11 @@
           if (activeEl) activeEl.classList.add('active-feat');
 
           setTimeout(() => {
-            statusEl.textContent = "COMPLETE";
+            statusEl.textContent = "COMPLETE (L7)";
             statusEl.style.color = "var(--green)";
+            const identified = mockApps[Math.floor(Math.random() * mockApps.length)];
+            appEl.textContent = identified;
+            appEl.style.color = identified.includes('Netflix') || identified.includes('TikTok') ? 'var(--red)' : 'var(--green)';
           }, 1600);
         }
 
