@@ -890,6 +890,22 @@
       font-size: 0.75rem;
       color: var(--accent);
     }
+
+    .feat-tag {
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      color: var(--dim);
+      font-family: 'Share Tech Mono', monospace;
+      transition: all 0.3s;
+    }
+
+    .feat-tag.active-feat {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      box-shadow: 0 0 5px var(--accent);
+    }
   </style>
 </head>
 
@@ -915,8 +931,7 @@
     <!-- Left: Traffic Sources -->
     <div class="panel traffic-sources">
       <div class="panel-title">Traffic Sources</div>
-      <div class="traffic-item" style="cursor: pointer; border-bottom: none; padding-bottom: 5px;"
-        onclick="document.getElementById('voip-details').style.display = document.getElementById('voip-details').style.display === 'none' ? 'block' : 'none'">
+      <div class="traffic-item">
         <div class="t-label">
           <div class="t-icon">📞</div>
           VoIP
@@ -928,16 +943,7 @@
           </div>
         </div>
       </div>
-      <div id="voip-details"
-        style="display: none; padding-left: 46px; border-bottom: 1px solid rgba(10, 64, 96, 0.5); font-size: 0.75rem; color: var(--dim); padding-bottom: 10px; font-family: 'Share Tech Mono', monospace;">
-        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>Enterprise SIP
-            Trunk</span><span style="color:var(--accent);">~80%</span></div>
-        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>WebRTC Audio</span><span
-            style="color:var(--accent);">~20%</span></div>
-      </div>
-
-      <div class="traffic-item" style="cursor: pointer; border-bottom: none; padding-bottom: 5px;"
-        onclick="document.getElementById('http-details').style.display = document.getElementById('http-details').style.display === 'none' ? 'block' : 'none'">
+      <div class="traffic-item">
         <div class="t-label">
           <div class="t-icon">🌐</div>
           HTTP
@@ -949,20 +955,7 @@
           </div>
         </div>
       </div>
-      <div id="http-details"
-        style="display: none; padding-left: 46px; border-bottom: 1px solid rgba(10, 64, 96, 0.5); font-size: 0.75rem; color: var(--dim); padding-bottom: 10px; font-family: 'Share Tech Mono', monospace;">
-        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>Edu:
-            Canvas/Coursera</span><span style="color:var(--green);">High Prio</span></div>
-        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>Ent:
-            Netflix/TikTok</span><span style="color:var(--red);">Throttled</span></div>
-        <div style="margin-top: 6px; font-size: 0.65rem; color: var(--accent);"><a href="#"
-            onclick="document.querySelector('[data-target=\'view-analytics\']').click(); return false;"
-            style="color: var(--accent); text-decoration: underline;">See Analytics Tab for full Deep Packet
-            Inspection</a></div>
-      </div>
-
-      <div class="traffic-item" style="cursor: pointer; border-bottom: none; padding-bottom: 5px;"
-        onclick="document.getElementById('ftp-details').style.display = document.getElementById('ftp-details').style.display === 'none' ? 'block' : 'none'">
+      <div class="traffic-item">
         <div class="t-label">
           <div class="t-icon">📁</div>
           FTP
@@ -973,13 +966,6 @@
             <div class="t-fill" id="ftp-bar" style="width:52%"></div>
           </div>
         </div>
-      </div>
-      <div id="ftp-details"
-        style="display: none; padding-left: 46px; font-size: 0.75rem; color: var(--dim); font-family: 'Share Tech Mono', monospace;">
-        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>Steam Game
-            Updates</span><span style="color:var(--red);">Capped</span></div>
-        <div style="display: flex; justify-content: space-between; margin-top: 4px;"><span>Background Cloud
-            Sync</span><span style="color:var(--yellow);">Scavenger</span></div>
       </div>
       <div style="margin-top:16px;">
         <div style="font-size:0.7rem;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">
@@ -1017,20 +1003,22 @@
       <!-- Feature Extraction -->
       <div class="panel" style="padding:14px 20px;">
         <div class="panel-title">⬡ Feature Extraction</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <span class="feat-tag" id="feat-jitter">jitter</span>
+          <span class="feat-tag" id="feat-tput">throughput</span>
+          <span class="feat-tag" id="feat-loss">loss_rate</span>
+          <span class="feat-tag" id="feat-rtt">rtt</span>
+          <span class="feat-tag" id="feat-burst">burstiness</span>
           <span
-            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">jitter</span>
-          <span
-            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">throughput</span>
-          <span
-            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">loss_rate</span>
-          <span
-            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">rtt</span>
-          <span
-            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">burstiness</span>
-          <span
-            style="border:1px solid var(--border);padding:4px 10px;font-size:0.75rem;color:var(--accent);font-family:'Share Tech Mono',monospace;">→
-            vector[12]</span>
+            style="border:1px solid var(--accent);padding:4px 10px;font-size:0.75rem;color:var(--accent);font-family:'Share Tech Mono',monospace; min-width: 140px; text-align: center;">
+            <span id="extraction-status">COLLECTING</span> → <span id="feature-vector">[0.0, 0.0, 0.0, 0.0, 0.0]</span>
+          </span>
+        </div>
+        <div
+          style="margin-top: 10px; background: rgba(0, 212, 255, 0.1); height: 2px; position: relative; overflow: hidden;">
+          <div id="feature-progress"
+            style="position: absolute; height: 100%; width: 30%; background: var(--accent); left: -100%; transition: left 0.5s linear;">
+          </div>
         </div>
       </div>
 
@@ -1672,7 +1660,45 @@
         document.getElementById('arrival-rate').textContent = data.monitoring.arrival_rate;
         document.getElementById('queue-val').textContent = data.monitoring.queue_length;
 
-        // ML Predictor
+        // Feature Extraction Animation
+        const statusEl = document.getElementById('extraction-status');
+        const vectorEl = document.getElementById('feature-vector');
+        const progressEl = document.getElementById('feature-progress');
+        const tags = ['feat-jitter', 'feat-tput', 'feat-loss', 'feat-rtt', 'feat-burst'];
+
+        if (statusEl && vectorEl && progressEl) {
+          // Trigger animation cycle
+          statusEl.textContent = "EXTRACTING";
+          statusEl.style.color = "var(--accent)";
+
+          // Move progress bar
+          progressEl.style.transition = "none";
+          progressEl.style.left = "-100%";
+          setTimeout(() => {
+            progressEl.style.transition = "left 1.5s linear";
+            progressEl.style.left = "100%";
+          }, 50);
+
+          // Generate random feature vector
+          const vec = Array.from({ length: 5 }, () => Math.random().toFixed(2));
+          vectorEl.textContent = `[${vec.join(', ')}]`;
+
+          // Highlight a random tag
+          tags.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('active-feat');
+          });
+          const activeId = tags[Math.floor(Math.random() * tags.length)];
+          const activeEl = document.getElementById(activeId);
+          if (activeEl) activeEl.classList.add('active-feat');
+
+          setTimeout(() => {
+            statusEl.textContent = "COMPLETE";
+            statusEl.style.color = "var(--green)";
+          }, 1600);
+        }
+
+        // ML Predictor Animation Logic continua after...
         ['low', 'med', 'high'].forEach(s => {
           document.getElementById('state-' + s).classList.toggle('active-state', s === data.ml.state);
         });
