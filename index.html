@@ -1269,7 +1269,7 @@
               <span style="font-size: 0.7rem; color: var(--dim); margin-top: 4px;">Guaranteed bandwidth percentage
                 during High Congestion</span>
             </div>
-            <input type="range" min="10" max="80" value="50" style="width: 150px;">
+            <input type="range" id="config-voip-alloc" min="10" max="80" value="50" style="width: 150px;">
           </div>
           <div
             style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(10,64,96,0.3); padding-bottom: 10px;">
@@ -1278,7 +1278,7 @@
               <span style="font-size: 0.7rem; color: var(--dim); margin-top: 4px;">Trigger level for transitioning to
                 Medium congestion</span>
             </div>
-            <input type="range" min="0" max="1" step="0.05" value="0.4" style="width: 150px;">
+            <input type="range" id="config-threshold" min="0" max="1" step="0.05" value="0.4" style="width: 150px;">
           </div>
           <div
             style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(10,64,96,0.3); padding-bottom: 10px;">
@@ -1287,18 +1287,18 @@
               <span style="font-size: 0.7rem; color: var(--dim); margin-top: 4px;">How non-real-time file transfers are
                 queued globally</span>
             </div>
-            <select
+            <select id="config-ftp-prio"
               style="background:var(--bg); color:var(--text); border:1px solid var(--accent); padding:6px 10px; width: 150px; font-family: 'Rajdhani', sans-serif;">
-              <option>Low (Scavenger)</option>
-              <option selected>Standard (Best Effort)</option>
-              <option>High (Expedited)</option>
+              <option value="low">Low (Scavenger)</option>
+              <option value="std" selected>Standard (Best Effort)</option>
+              <option value="high">High (Expedited)</option>
             </select>
           </div>
 
           <div style="margin-top: 20px; display: flex; gap: 15px;">
-            <button class="nav-btn" style="flex: 1;"
-              onclick="alert('Configuration parameters saved successfully.')">Apply Policy</button>
-            <button class="nav-btn" style="border-color: var(--dim); color: var(--dim);">Reset Defaults</button>
+            <button class="nav-btn" style="flex: 1;" onclick="applyConfig()">Apply Policy</button>
+            <button class="nav-btn" style="border-color: var(--dim); color: var(--dim);" onclick="resetConfig()">Reset
+              Defaults</button>
           </div>
         </div>
       </div>
@@ -1381,6 +1381,34 @@
     let phase = 0.0;
     let lastUpdate = Date.now() / 1000;
 
+    // Virtual Config State
+    let activeConfig = {
+      voipAlloc: 50,
+      threshold: 0.4,
+      ftpPrio: "std"
+    };
+
+    // User alerts queue for mock state
+    let pendingAlerts = [];
+
+    function applyConfig() {
+      activeConfig.voipAlloc = parseInt(document.getElementById('config-voip-alloc').value) || 50;
+      activeConfig.threshold = parseFloat(document.getElementById('config-threshold').value) || 0.4;
+      activeConfig.ftpPrio = document.getElementById('config-ftp-prio').value || "std";
+
+      const now_str = new Date().toTimeString().slice(0, 8);
+      pendingAlerts.push({ time: now_str, msg: "USER: QoS Policy Configuration Applied", cls: "ok" });
+    }
+
+    function resetConfig() {
+      document.getElementById('config-voip-alloc').value = 50;
+      document.getElementById('config-threshold').value = 0.4;
+      document.getElementById('config-ftp-prio').value = "std";
+      applyConfig();
+      const now_str = new Date().toTimeString().slice(0, 8);
+      pendingAlerts.push({ time: now_str, msg: "USER: Reverted to Default Policies", cls: "warn" });
+    }
+
     function getMockState() {
       const now = Date.now() / 1000;
       const dt = now - lastUpdate;
@@ -1408,8 +1436,9 @@
       const infer_time = randInt(5, 15);
 
       let state = "low";
-      if (utilization_ratio >= 0.75) state = "high";
-      else if (utilization_ratio >= 0.4) state = "med";
+      // Use config threshold
+      if (utilization_ratio >= Math.min(0.9, activeConfig.threshold + 0.35)) state = "high";
+      else if (utilization_ratio >= activeConfig.threshold) state = "med";
 
       let bw_voip = 20, bw_http = 50, bw_ftp = 30;
       let q_voip = 10, q_http = 30, q_ftp = 60;
@@ -1417,9 +1446,18 @@
       if (state === "med") {
         bw_voip = 30; bw_http = 45; bw_ftp = 25;
         q_voip = 20; q_http = 40; q_ftp = 40;
+        if (activeConfig.ftpPrio === "high") { bw_ftp += 10; bw_http -= 10; }
+        if (activeConfig.ftpPrio === "low") { bw_ftp -= 10; bw_http += 10; }
       } else if (state === "high") {
-        bw_voip = 50; bw_http = 35; bw_ftp = 15;
+        // Apply VoIP allocation from config
+        bw_voip = activeConfig.voipAlloc;
+        // Distribute remaining
+        const rem = 100 - bw_voip;
+        bw_http = Math.floor(rem * 0.7);
+        bw_ftp = rem - bw_http;
+
         q_voip = 50; q_http = 30; q_ftp = 20;
+        if (activeConfig.ftpPrio === "high") { q_ftp += 15; q_http -= 15; }
       }
 
       const link_utilization = Math.min(100, Math.floor(utilization_ratio * 100));
@@ -1429,6 +1467,8 @@
       if (state === "high") {
         final_delay = base_delay * 0.8;
         packet_loss = 0.5 + (utilization_ratio - 0.75) * 5.0 + randUniform(0, 0.5);
+        // FTP config alters loss characteristics slightly
+        if (activeConfig.ftpPrio === "high") { packet_loss *= 0.8; final_delay *= 1.1; }
       } else if (state === "med") {
         final_delay = base_delay * 0.9;
         packet_loss = randUniform(0.05, 0.3);
@@ -1436,17 +1476,19 @@
 
       const final_tput = total_load * (1.0 - packet_loss / 100.0);
 
-      const alerts = [];
+      const alerts = [...pendingAlerts];
+      pendingAlerts = []; // clear
+
       const now_str = new Date().toTimeString().slice(0, 8);
       if (utilization_ratio > 0.85) {
         alerts.push({ time: now_str, msg: "Critical link utilization detected > 85%", cls: "crit" });
-      } else if (state === "high") {
-        alerts.push({ time: now_str, msg: `QoS active: VoIP bandwidth increased to ${bw_voip}%`, cls: "warn" });
-      } else if (state === "low" && Math.random() < 0.1) {
+      } else if (state === "high" && alerts.length === 0) {
+        alerts.push({ time: now_str, msg: `QoS active: VoIP bandwidth reserved at ${bw_voip}%`, cls: "warn" });
+      } else if (state === "low" && Math.random() < 0.1 && alerts.length === 0) {
         alerts.push({ time: now_str, msg: "Nominal traffic conditions - Policy reset", cls: "ok" });
       }
 
-      if (packet_loss > 1.0) {
+      if (packet_loss > 1.0 && alerts.length === 0) {
         alerts.push({ time: now_str, msg: `Packet loss elevated (${packet_loss.toFixed(1)}%) on background queues`, cls: "warn" });
       }
 
