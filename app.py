@@ -1,8 +1,9 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request as flask_request
 from flask_cors import CORS
 import time
 import random
 import math
+import requests as req_lib
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -179,6 +180,27 @@ state_manager = NetworkState()
 @app.route('/api/status', methods=['GET'])
 def get_status():
     return jsonify(state_manager.get_current_metrics())
+
+@app.route('/api/towers', methods=['GET'])
+def get_towers():
+    """Proxy OpenCelliD so browser avoids CORS."""
+    lat  = flask_request.args.get('lat', type=float)
+    lng  = flask_request.args.get('lng', type=float)
+    if lat is None or lng is None:
+        return jsonify({'error': 'lat and lng required'}), 400
+
+    OCID_KEY = 'pk.67c74360612eba39b08f928817786da9'
+    delta    = 0.008         # ~800m radius (safely under 4,000,000 sq. mts limit)
+    bbox     = f"{lat-delta},{lng-delta},{lat+delta},{lng+delta}"
+    url      = f"https://opencellid.org/cell/getInArea?key={OCID_KEY}&BBOX={bbox}&format=json&limit=500"
+
+    try:
+        resp = req_lib.get(url, timeout=15)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({'error': str(e), 'cells': []}), 502
+
 
 @app.route('/')
 def index():

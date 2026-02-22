@@ -230,6 +230,62 @@
       border-top-color: rgba(255, 68, 68, 0.9);
     }
 
+    /* Cell Tower Markers */
+    .tower-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      box-shadow: 0 0 10px currentColor;
+      transition: transform 0.2s;
+    }
+
+    .tower-icon:hover {
+      transform: scale(1.3);
+    }
+
+    /* Map Legend */
+    .map-legend {
+      position: absolute;
+      bottom: 20px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(3, 12, 18, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.78rem;
+      color: #ccc;
+      min-width: 140px;
+    }
+
+    .map-legend h4 {
+      color: var(--accent);
+      margin: 0 0 8px 0;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
     .hub-icon-container {
       display: flex;
       align-items: center;
@@ -1371,6 +1427,25 @@
           <button class="map-btn" style="background: var(--green);" onclick="autoDetectLocation()">AUTO-SCAN</button>
         </div>
         <div id="map-container"></div>
+        <div class="map-legend" id="map-legend" style="display:none;">
+          <h4>📡 Networks</h4>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#00bfff;"></div> Jio (4G/5G)
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#ff6600;"></div> Airtel (4G/5G)
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#ff0080;"></div> Vi / Vodafone
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#00cc44;"></div> BSNL (3G/4G)
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#ffcc00;"></div> MTNL
+          </div>
+          <div style="margin-top:8px; color:#888; font-size:0.7rem;">📶 Click tower for details</div>
+        </div>
       </div>
     </div>
   </main>
@@ -2098,11 +2173,21 @@
 
       window.networkMap = L.map('map-container', {
         zoomControl: false,
-        attributionControl: false
-      }).setView([20, 0], 2); // Global view
+        attributionControl: false,
+        worldCopyJump: false,
+        maxBoundsViscosity: 1.0,
+        minZoom: 2,
+        maxZoom: 18
+      }).setView([20, 10], 3);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19
+      // Restrict to single world copy
+      const bounds = L.latLngBounds(L.latLng(-90, -180), L.latLng(90, 180));
+      window.networkMap.setMaxBounds(bounds);
+
+      L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        noWrap: true,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
       }).addTo(window.networkMap);
 
       // Initialize Heatmap
@@ -2245,26 +2330,93 @@
         .bindTooltip(label, { permanent: true, direction: 'top', className: 'user-tooltip' })
         .openPopup();
 
-      // Clear old local hubs
+      // Clear old towers
       window.localHubs.forEach(h => window.networkMap.removeLayer(h));
       window.localHubs = [];
 
-      // Generate localized "Nearby" hubs around the new center
-      for (let i = 0; i < 4; i++) {
-        const dLat = (Math.random() - 0.5) * 0.02;
-        const dLng = (Math.random() - 0.5) * 0.02;
-        const hub = L.marker([lat + dLat, lng + dLng], {
-          icon: L.divIcon({
-            className: 'hub-icon-container',
-            html: '<div class="hub-pulse" style="background:var(--accent); width:8px; height:8px;"></div>',
-            iconSize: [15, 15]
-          })
-        }).addTo(window.networkMap)
-          .bindPopup(`<b>LOCAL-HUB-${Math.floor(Math.random() * 900 + 100)}</b><br>Signal: Strong`);
-        window.localHubs.push(hub);
+      // -- REAL cell tower data via Flask proxy → OpenCelliD --
+      const legend = document.getElementById('map-legend');
+      if (legend) {
+        legend.style.display = 'block';
+        legend.innerHTML = '<h4>📡 Networks</h4><div style="color:#aaa;font-size:0.75rem;">⏳ Scanning live towers...</div>';
       }
 
-      // Update global traffic lines to include new context potentially
+      // MNC → operator name + color for Indian networks
+      const mncMap = {
+        '404-26': { name: 'Jio', color: '#00bfff' },
+        '405-826': { name: 'Jio', color: '#00bfff' },
+        '405-854': { name: 'Jio', color: '#00bfff' },
+        '405-855': { name: 'Jio', color: '#00bfff' },
+        '404-10': { name: 'Airtel', color: '#ff6600' },
+        '404-45': { name: 'Airtel', color: '#ff6600' },
+        '404-49': { name: 'Airtel', color: '#ff6600' },
+        '405-01': { name: 'Airtel', color: '#ff6600' },
+        '404-20': { name: 'Vi', color: '#ff0080' },
+        '404-43': { name: 'Vi', color: '#ff0080' },
+        '404-60': { name: 'Vi', color: '#ff0080' },
+        '405-02': { name: 'Vi', color: '#ff0080' },
+        '404-16': { name: 'BSNL', color: '#00cc44' },
+        '404-27': { name: 'BSNL', color: '#00cc44' },
+        '404-53': { name: 'BSNL', color: '#00cc44' },
+        '404-54': { name: 'BSNL', color: '#00cc44' },
+        '404-68': { name: 'MTNL', color: '#ffcc00' },
+        '404-69': { name: 'MTNL', color: '#ffcc00' },
+      };
+      const radioLabels = { 'LTE': '4G', 'NR': '5G', 'UMTS': '3G', 'GSM': '2G', 'CDMA': 'CDMA' };
+
+      fetch(`/api/towers?lat=${lat}&lng=${lng}`)
+        .then(r => r.json())
+        .then(data => {
+          const cells = data.cells || [];
+          const foundOps = new Map();
+
+          cells.forEach(cell => {
+            const mccMnc = `${cell.mcc}-${cell.mnc}`;
+            const opInfo = mncMap[mccMnc] || { name: `MCC${cell.mcc}/MNC${cell.mnc}`, color: '#aaaaaa' };
+            const radio = radioLabels[cell.radio] || cell.radio || 'Unknown';
+            const towerLat = parseFloat(cell.lat);
+            const towerLng = parseFloat(cell.lon);
+
+            if (isNaN(towerLat) || isNaN(towerLng)) return;
+            if (!foundOps.has(opInfo.name)) foundOps.set(opInfo.name, opInfo.color);
+
+            const towerIcon = L.divIcon({
+              className: '',
+              html: `<div class="tower-icon" style="background:${opInfo.color}22;color:${opInfo.color};border-color:${opInfo.color};">📡</div>`,
+              iconSize: [28, 28], iconAnchor: [14, 14]
+            });
+
+            const marker = L.marker([towerLat, towerLng], { icon: towerIcon })
+              .addTo(window.networkMap)
+              .bindPopup(`<div style="font-family:'Rajdhani',sans-serif;min-width:175px;">
+                <b style="color:${opInfo.color};font-size:1rem;">📡 ${opInfo.name}</b>
+                <hr style="border-color:${opInfo.color}55;margin:6px 0;">
+                <div><b>Radio:</b> <span style="color:${opInfo.color}">${radio}</span></div>
+                <div><b>Cell ID:</b> ${cell.cellid || '?'}</div>
+                <div><b>LAC:</b> ${cell.lac || '?'}</div>
+                <div><b>MCC / MNC:</b> ${cell.mcc} / ${cell.mnc}</div>
+                <div><b>Range:</b> ~${cell.range || '?'}m</div>
+              </div>`);
+            window.localHubs.push(marker);
+          });
+
+          if (legend) {
+            if (foundOps.size === 0) {
+              legend.innerHTML = `<h4>📡 Networks</h4><div style="color:#888;font-size:0.72rem;">No towers found in this area<br>on OpenCelliD.</div>`;
+            } else {
+              let rows = '';
+              foundOps.forEach((color, name) => {
+                rows += `<div class="legend-row"><div class="legend-dot" style="background:${color};"></div>${name}</div>`;
+              });
+              legend.innerHTML = `<h4>📡 Networks</h4>${rows}<div style="margin-top:8px;color:#888;font-size:0.7rem;">📶 Click tower for details</div>`;
+            }
+          }
+        })
+        .catch(err => {
+          console.warn('OpenCelliD error:', err);
+          if (legend) legend.innerHTML = `<h4>📡 Networks</h4><div style="color:#f44;font-size:0.72rem;">⚠ Could not load tower data</div>`;
+        });
+
       if (window.updateMapTraffic) window.updateMapTraffic();
     }
 
