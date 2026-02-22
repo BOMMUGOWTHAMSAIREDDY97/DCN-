@@ -1862,6 +1862,22 @@
         alerts.push({ time: now_str, msg: `Packet loss elevated (${packet_loss.toFixed(1)}%) on background queues`, cls: "warn" });
       }
 
+      if (Math.random() < 0.2 && alerts.length === 0) {
+        const sites = [
+          ["Netflix / YouTube 4K", 5.0 + Math.random() * 20.0],
+          ["Coursera / edX", 2.0 + Math.random() * 6.0],
+          ["Canvas / Moodle CMS", 1.0 + Math.random() * 4.0],
+          ["TikTok / Instagram Reels", 3.0 + Math.random() * 12.0],
+          ["Steam Game Downloads", 20.0 + Math.random() * 60.0],
+          ["Wikipedia / Web Browsing", 0.1 + Math.random() * 1.9],
+          ["Zoom / Teams Video call", 1.5 + Math.random() * 2.5]
+        ];
+        let [site, speed] = sites[Math.floor(Math.random() * sites.length)];
+        if (state === "high") speed *= 0.3;
+        else if (state === "low") speed *= 1.2;
+        alerts.push({ time: now_str, msg: `DPI Engine: ${site} flow detected consuming ${speed.toFixed(1)} Mbps`, cls: "" });
+      }
+
       const metrics = {
         traffic: { voip: Math.round(voip_kbps), http: parseFloat(http_mbps.toFixed(1)), ftp: parseFloat(ftp_mbps.toFixed(1)), aggregate: parseFloat(total_load.toFixed(1)) },
         monitoring: { arrival_rate, delay: parseFloat(base_delay.toFixed(1)), queue_length },
@@ -2154,10 +2170,14 @@
         if (targetEl) targetEl.classList.add('active-view');
 
         // Special handling for map resize
-        if (targetId === 'view-map' && window.networkMap) {
-          setTimeout(() => {
-            window.networkMap.invalidateSize();
-          }, 200);
+        if (targetId === 'view-map') {
+          if (!window.networkMap) {
+            initNetworkMap();
+          } else {
+            setTimeout(() => {
+              window.networkMap.invalidateSize();
+            }, 200);
+          }
         }
       });
     });
@@ -2165,7 +2185,11 @@
     // --- MAP LOGIC ---
     window.networkMap = null;
     const hubs = [
-      { name: "Bengaluru", lat: 12.9716, lng: 77.5946, intensity: 1.0 }
+      { id: "mumbai", name: "Mumbai (Jio)", lat: 19.0760, lng: 72.8777, intensity: 1.2 },
+      { id: "delhi", name: "Delhi (Airtel)", lat: 28.6139, lng: 77.2090, intensity: 1.5 },
+      { id: "blr", name: "Bengaluru (Vi)", lat: 12.9716, lng: 77.5946, intensity: 1.0 },
+      { id: "chennai", name: "Chennai (BSNL)", lat: 13.0827, lng: 80.2707, intensity: 0.8 },
+      { id: "hyd", name: "Hyderabad (Jio)", lat: 17.3850, lng: 78.4867, intensity: 1.1 }
     ];
 
     function initNetworkMap() {
@@ -2178,13 +2202,14 @@
         maxBoundsViscosity: 1.0,
         minZoom: 2,
         maxZoom: 18
-      }).setView([20, 10], 3);
+      }).setView([22.0, 79.0], 5);
 
       // Restrict to single world copy
       const bounds = L.latLngBounds(L.latLng(-90, -180), L.latLng(90, 180));
       window.networkMap.setMaxBounds(bounds);
 
-      L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+      // Satellite Hybrid Mode (lyrs=y)
+      L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
         maxZoom: 20,
         noWrap: true,
         subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
@@ -2201,14 +2226,23 @@
 
       const hubIcon = L.divIcon({
         className: 'hub-icon-container',
-        html: '<div class="hub-pulse" style="width:8px; height:8px;"></div>',
-        iconSize: [12, 12]
+        html: '<div class="hub-pulse" style="width:12px; height:12px;"></div>',
+        iconSize: [16, 16]
       });
 
       hubs.forEach(h => {
+        const popupContent = `
+          <div style="text-align: center; font-family: 'Rajdhani', sans-serif;">
+            <b style="color:var(--accent);font-size:1.1em;">${h.name}</b><br>
+            Traffic Load: <span id="int-${h.id}">${h.intensity}</span><br>
+            <button onclick="focusOnLocation(${h.lat}, ${h.lng}, '${h.name}')" style="margin-top:8px; padding:4px 8px; background:var(--accent); color:#fff; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+              Scan Live Network
+            </button>
+          </div>
+        `;
         L.marker([h.lat, h.lng], { icon: hubIcon })
           .addTo(window.networkMap)
-          .bindPopup(`<b style="color:var(--accent)">${h.name}</b><br>Traffic Intensity: <span id="int-${h.name.replace(/\s+/g, '')}">${h.intensity}</span>`);
+          .bindPopup(popupContent);
       });
 
       // Dynamic Traffic lines
@@ -2222,7 +2256,7 @@
         // Focus Heat on Active Target Hubs (Global or Local)
         hubs.forEach(h => {
           const scaledIntensity = h.intensity * globalScale * (0.8 + Math.random() * 0.4);
-          const span = document.getElementById(`int-${h.name.replace(/\s+/g, '')}`);
+          const span = document.getElementById(`int-${h.id}`);
           if (span) span.innerText = scaledIntensity.toFixed(2);
           points.push([h.lat, h.lng, scaledIntensity]);
         });
@@ -2371,6 +2405,8 @@
         '405-826': { name: 'Jio', color: '#00bfff' },
         '405-854': { name: 'Jio', color: '#00bfff' },
         '405-855': { name: 'Jio', color: '#00bfff' },
+        '405-869': { name: 'Jio', color: '#00bfff' },
+        '405-874': { name: 'Jio', color: '#00bfff' },
         '404-10': { name: 'Airtel', color: '#ff6600' },
         '404-45': { name: 'Airtel', color: '#ff6600' },
         '404-49': { name: 'Airtel', color: '#ff6600' },
@@ -2496,7 +2532,7 @@
 
     // Initialize map on load if needed
     window.addEventListener('load', () => {
-      initNetworkMap();
+      // initNetworkMap(); // deferred until tab is clicked
     });
   </script>
 </body>

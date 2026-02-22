@@ -8,28 +8,28 @@
             "name": "Launch Edge",
             "request": "launch",
             "type": "msedge",
-            "url": "http://localhost:8080",
+            "url": "http://localhost:5000",
             "webRoot": "${workspaceFolder}"
         },
         {
             "name": "Launch Edge",
             "request": "launch",
             "type": "msedge",
-            "url": "http://localhost:8080",
+            "url": "http://localhost:5000",
             "webRoot": "${workspaceFolder}"
         },
         {
             "name": "Launch Edge",
             "request": "launch",
             "type": "msedge",
-            "url": "http://localhost:8080",
+            "url": "http://localhost:5000",
             "webRoot": "${workspaceFolder}"
         },
         {
             "type": "chrome",
             "request": "launch",
-            "name": "Open cn1.html",
-            "file": "c:\\Users\\B.GOWTHAMSAIREDDY\\dcn23\\cn1.html"
+            "name": "Open index.html",
+            "file": "${workspaceFolder}\\index.html"
         }
     ]
 }

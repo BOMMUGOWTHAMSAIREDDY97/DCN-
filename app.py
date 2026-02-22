@@ -122,6 +122,23 @@ class NetworkState:
         if packet_loss > 1.0:
              alerts.append({"time": now_str, "msg": f"Packet loss elevated ({packet_loss:.1f}%) on background queues", "cls": "warn"})
 
+        if random.random() < 0.2:
+            websites = [
+                ("Netflix / YouTube 4K", random.uniform(5.0, 25.0)),
+                ("Coursera / edX", random.uniform(2.0, 8.0)),
+                ("Canvas / Moodle CMS", random.uniform(1.0, 5.0)),
+                ("TikTok / Instagram Reels", random.uniform(3.0, 15.0)),
+                ("Steam Game Downloads", random.uniform(20.0, 80.0)),
+                ("Wikipedia / Web Browsing", random.uniform(0.1, 2.0)),
+                ("Zoom / Teams Video call", random.uniform(1.5, 4.0))
+            ]
+            site, speed = random.choice(websites)
+            if state == "low":
+                speed *= 1.2
+            elif state == "high":
+                speed *= 0.3
+            alerts.append({"time": now_str, "msg": f"DPI Engine: {site} flow detected consuming {speed:.1f} Mbps", "cls": ""})
+
         metrics_data = {
             "traffic": {
                 "voip": round(voip_kbps),
