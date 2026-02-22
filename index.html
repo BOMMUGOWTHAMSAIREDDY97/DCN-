@@ -2517,10 +2517,10 @@
       };
 
       // Try local proxy (OpenCelliD) first, fallback to Overpass (OSM) for static sites
-      fetch(`/api/towers?lat=${lat}&lng=${lng}`)
+      fetch(`http://127.0.0.1:5000/api/towers?lat=${lat}&lng=${lng}`)
         .then(r => {
           if (!r.ok) throw new Error('Proxy unavailable');
-          return fetchTowers(`/api/towers?lat=${lat}&lng=${lng}`, true);
+          return fetchTowers(`http://127.0.0.1:5000/api/towers?lat=${lat}&lng=${lng}`, true);
         })
         .catch(() => {
           console.log("Static Mode: Using Overpass API cluster");
