@@ -9,8 +9,8 @@
     href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/Leaflet/Leaflet.heat@gh-pages/dist/leaflet-heat.js"></script>
   <style>
     :root {
       --bg: #030c12;
@@ -2090,12 +2090,31 @@
     // --- MAP LOGIC ---
     window.networkMap = null;
     const hubs = [
-      { name: "BLR-HUB-01", lat: 12.9716, lng: 77.5946 },
-      { name: "MUM-HUB-05", lat: 19.0760, lng: 72.8777 },
-      { name: "DEL-HUB-02", lat: 28.6139, lng: 77.2090 },
-      { name: "HYD-HUB-04", lat: 17.3850, lng: 78.4867 },
-      { name: "CHN-HUB-03", lat: 13.0827, lng: 80.2707 },
-      { name: "KOL-HUB-06", lat: 22.5726, lng: 88.3639 }
+      { name: "Bengaluru", lat: 12.9716, lng: 77.5946, intensity: 1.0 },
+      { name: "Mumbai", lat: 19.0760, lng: 72.8777, intensity: 1.2 },
+      { name: "Delhi", lat: 28.6139, lng: 77.2090, intensity: 0.9 },
+      { name: "Hyderabad", lat: 17.3850, lng: 78.4867, intensity: 0.8 },
+      { name: "Chennai", lat: 13.0827, lng: 80.2707, intensity: 0.7 },
+      { name: "Kolkata", lat: 22.5726, lng: 88.3639, intensity: 0.6 },
+      { name: "New York", lat: 40.7128, lng: -74.0060, intensity: 1.5 },
+      { name: "London", lat: 51.5074, lng: -0.1278, intensity: 1.4 },
+      { name: "Tokyo", lat: 35.6762, lng: 139.6503, intensity: 1.6 },
+      { name: "Singapore", lat: 1.3521, lng: 103.8198, intensity: 1.3 },
+      { name: "Sydney", lat: -33.8688, lng: 151.2093, intensity: 0.8 },
+      { name: "Dubai", lat: 25.2048, lng: 55.2708, intensity: 1.1 },
+      { name: "Paris", lat: 48.8566, lng: 2.3522, intensity: 1.2 },
+      { name: "Berlin", lat: 52.5200, lng: 13.4050, intensity: 1.1 },
+      { name: "San Francisco", lat: 37.7749, lng: -122.4194, intensity: 1.4 },
+      { name: "Sao Paulo", lat: -23.5505, lng: -46.6333, intensity: 0.9 },
+      { name: "Lagos", lat: 6.5244, lng: 3.3792, intensity: 0.7 },
+      { name: "Johannesburg", lat: -26.2041, lng: 28.0473, intensity: 0.6 },
+      { name: "Seoul", lat: 37.5665, lng: 126.9780, intensity: 1.4 },
+      { name: "Hong Kong", lat: 22.3193, lng: 114.1694, intensity: 1.5 },
+      { name: "Chicago", lat: 41.8781, lng: -87.6298, intensity: 1.2 },
+      { name: "Los Angeles", lat: 34.0522, lng: -118.2437, intensity: 1.3 },
+      { name: "Toronto", lat: 43.6532, lng: -79.3832, intensity: 1.0 },
+      { name: "Mexico City", lat: 19.4326, lng: -99.1332, intensity: 0.8 },
+      { name: "Bangkok", lat: 13.7563, lng: 100.5018, intensity: 1.1 }
     ];
 
     function initNetworkMap() {
@@ -2104,50 +2123,73 @@
       window.networkMap = L.map('map-container', {
         zoomControl: false,
         attributionControl: false
-      }).setView([20.5937, 78.9629], 5);
+      }).setView([20, 0], 2); // Global view
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 19
       }).addTo(window.networkMap);
 
+      // Initialize Heatmap
+      const heatPoints = hubs.map(h => [h.lat, h.lng, h.intensity]);
+      window.heatLayer = L.heatLayer(heatPoints, {
+        radius: 35,
+        blur: 20,
+        maxZoom: 10,
+        gradient: { 0.4: 'cyan', 0.65: 'lime', 1: 'red' }
+      }).addTo(window.networkMap);
+
       const hubIcon = L.divIcon({
         className: 'hub-icon-container',
-        html: '<div class="hub-pulse"></div>',
-        iconSize: [20, 20]
+        html: '<div class="hub-pulse" style="width:8px; height:8px;"></div>',
+        iconSize: [12, 12]
       });
 
       hubs.forEach(h => {
         L.marker([h.lat, h.lng], { icon: hubIcon })
           .addTo(window.networkMap)
-          .bindPopup(`<b style="color:var(--accent)">${h.name}</b><br>Status: OK`);
+          .bindPopup(`<b style="color:var(--accent)">${h.name}</b><br>Traffic Intensity: <span id="int-${h.name.replace(/\s+/g, '')}">${h.intensity}</span>`);
       });
 
       // Dynamic Traffic lines
       window.trafficLines = [];
       function updateMapTraffic() {
-        if (!window.networkMap) return;
+        if (!window.networkMap || !window.heatLayer) return;
+
+        // Scale factors from live metrics if available
+        const globalScale = window.lastMetrics ? (window.lastMetrics.traffic.aggregate / 5) : 1.0;
+
+        // Update Heatmap Intensities
+        const newHeatPoints = hubs.map(h => {
+          const scaledIntensity = h.intensity * globalScale * (0.8 + Math.random() * 0.4);
+          const span = document.getElementById(`int-${h.name.replace(/\s+/g, '')}`);
+          if (span) span.innerText = scaledIntensity.toFixed(2);
+          return [h.lat, h.lng, scaledIntensity];
+        });
+        window.heatLayer.setLatLngs(newHeatPoints);
 
         // Remove old lines
         window.trafficLines.forEach(l => window.networkMap.removeLayer(l));
         window.trafficLines = [];
 
-        // Simple traffic lines (randomly)
+        // Randomly draw lines between major hubs
         for (let i = 0; i < hubs.length; i++) {
-          for (let j = i + 1; j < hubs.length; j++) {
-            if (Math.random() > 0.5) {
-              const weight = 1 + Math.random() * 2;
-              const opacity = 0.1 + Math.random() * 0.4;
-              const line = L.polyline([
-                [hubs[i].lat, hubs[i].lng],
-                [hubs[j].lat, hubs[j].lng]
-              ], {
-                color: 'rgba(0, 255, 136, 0.4)',
-                weight: weight,
-                opacity: opacity,
-                dashArray: '5, 10'
-              }).addTo(window.networkMap);
-              window.trafficLines.push(line);
-            }
+          const source = hubs[i];
+          if (Math.random() > 0.85) {
+            // Pick a random destination
+            const j = Math.floor(Math.random() * hubs.length);
+            if (i === j) continue;
+            const dest = hubs[j];
+
+            const line = L.polyline([
+              [source.lat, source.lng],
+              [dest.lat, dest.lng]
+            ], {
+              color: 'rgba(0, 255, 136, 0.3)',
+              weight: 0.5 + Math.random() * 1.5,
+              opacity: 0.2,
+              dashArray: '5, 10'
+            }).addTo(window.networkMap);
+            window.trafficLines.push(line);
           }
         }
       }
