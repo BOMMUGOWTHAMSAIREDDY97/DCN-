@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 import time
 import random
@@ -13,6 +13,13 @@ class NetworkState:
         self.phase = 0.0
         # Data history for moving averages or trends could be added here
         self.last_update = time.time()
+        self.config = {
+            "voip_alloc": 50,
+            "threshold": 0.4,
+            "ftp_prio": "std"
+        }
+        self.dataset = [] # Stores history for "Excel" view
+        self.last_minute = None # Track sampling interval
         
     def get_current_metrics(self):
         now = time.time()
@@ -52,9 +59,9 @@ class NetworkState:
         confidence = round(random.uniform(85.0, 98.0), 1)
         infer_time = random.randint(5, 15)
         
-        if utilization_ratio < 0.4:
+        if utilization_ratio < self.config['threshold']:
             state = "low"
-        elif utilization_ratio < 0.75:
+        elif utilization_ratio < min(0.95, self.config['threshold'] + 0.35):
             state = "med"
         else:
             state = "high"
@@ -69,11 +76,19 @@ class NetworkState:
             # Protect VoIP and HTTP slightly
             bw_voip, bw_http, bw_ftp = 30, 45, 25
             q_voip, q_http, q_ftp = 20, 40, 40
+            # Apply FTP Priority Logic
+            if self.config['ftp_prio'] == "high": bw_ftp += 10; bw_http -= 10; q_ftp -= 10; q_http += 10
+            if self.config['ftp_prio'] == "low": bw_ftp -= 10; bw_http += 10; q_ftp += 10; q_http -= 10
         else:
-            # High congestion: Heavily prioritize VoIP (Real-time)
-            bw_voip, bw_http, bw_ftp = 50, 35, 15
+            # High congestion: Heavily prioritize VoIP based on config
+            bw_voip = self.config['voip_alloc']
+            rem = 100 - bw_voip
+            bw_http = int(rem * 0.7)
+            bw_ftp = rem - bw_http
+            
             # Queue occupancy shifted to protect VoIP
             q_voip, q_http, q_ftp = 50, 30, 20
+            if self.config['ftp_prio'] == "high": q_ftp -= 10; q_http += 10
 
         # 5. Bottleneck Router / Performance Analyzer
         link_utilization = min(100, int(utilization_ratio * 100))
@@ -106,7 +121,7 @@ class NetworkState:
         if packet_loss > 1.0:
              alerts.append({"time": now_str, "msg": f"Packet loss elevated ({packet_loss:.1f}%) on background queues", "cls": "warn"})
 
-        return {
+        metrics_data = {
             "traffic": {
                 "voip": round(voip_kbps),
                 "http": round(http_mbps, 1),
@@ -138,12 +153,55 @@ class NetworkState:
             },
             "alerts": alerts
         }
+        
+        # Append to dataset history at 1-minute intervals
+        current_min = time.strftime("%H:%M")
+        if current_min != self.last_minute:
+            snapshot = {
+                "time": now_str,
+                "voip": round(voip_kbps),
+                "http": round(http_mbps, 1),
+                "ftp": round(ftp_mbps, 1),
+                "delay": round(final_delay, 1),
+                "throughput": round(final_tput, 2),
+                "loss": round(packet_loss, 2),
+                "state": state
+            }
+            self.dataset.insert(0, snapshot) # Latest first
+            if len(self.dataset) > 100:
+                self.dataset.pop()
+            self.last_minute = current_min
+            
+        return metrics_data
 
 state_manager = NetworkState()
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
     return jsonify(state_manager.get_current_metrics())
+
+@app.route('/')
+def index():
+    import os
+    return send_from_directory(os.getcwd(), 'index.html')
+
+@app.route('/api/config', methods=['POST'])
+def update_config():
+    from flask import request
+    data = request.json
+    if not data:
+        return jsonify({"status": "error", "msg": "No data provided"}), 400
+    
+    # Update state manager config
+    if 'voip_alloc' in data: state_manager.config['voip_alloc'] = int(data['voip_alloc'])
+    if 'threshold' in data: state_manager.config['threshold'] = float(data['threshold'])
+    if 'ftp_prio' in data: state_manager.config['ftp_prio'] = data['ftp_prio']
+    
+    return jsonify({"status": "success", "config": state_manager.config})
+
+@app.route('/api/dataset', methods=['GET'])
+def get_dataset():
+    return jsonify(state_manager.dataset)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

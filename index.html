@@ -5,9 +5,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ML-Driven QoS Network Controller</title>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap"
-    rel="stylesheet">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <style>
     :root {
       --bg: #030c12;
@@ -136,7 +139,101 @@
     }
 
     .view-section.active-view {
-      display: grid;
+      display: block !important;
+    }
+
+    #map-container {
+      height: 100%;
+      width: 100%;
+      background: #01080d;
+      border: 1px solid var(--border);
+      position: relative;
+      z-index: 1;
+    }
+
+    .map-overlay {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      z-index: 1000;
+      display: flex;
+      gap: 10px;
+      background: rgba(3, 12, 18, 0.85);
+      padding: 10px;
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      backdrop-filter: blur(5px);
+    }
+
+    .map-input {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 5px 10px;
+      font-family: 'Share Tech Mono', monospace;
+      outline: none;
+      width: 200px;
+    }
+
+    .map-input:focus {
+      border-color: var(--accent);
+    }
+
+    .map-btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: bold;
+      transition: 0.2s;
+    }
+
+    .map-btn:hover {
+      filter: brightness(1.2);
+    }
+
+    .hub-pulse {
+      width: 12px;
+      height: 12px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent);
+      animation: hubPulse 2s infinite;
+    }
+
+    @keyframes hubPulse {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+
+      100% {
+        transform: scale(2.5);
+        opacity: 0;
+      }
+    }
+
+    .user-tooltip {
+      background: rgba(255, 68, 68, 0.9);
+      border: 1px solid #fff;
+      color: #fff;
+      font-family: 'Share Tech Mono', monospace;
+      font-weight: bold;
+      font-size: 0.7rem;
+      box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+      border-radius: 0;
+    }
+
+    .user-tooltip::before {
+      border-top-color: rgba(255, 68, 68, 0.9);
+    }
+
+    .hub-icon-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     @keyframes fadeIn {
@@ -920,10 +1017,12 @@
       <span id="clock">00:00:00</span>
     </div>
     <div class="nav">
-      <button class="nav-btn active" data-target="view-dashboard">Dashboard</button>
-      <button class="nav-btn" data-target="view-analytics">Analytics</button>
-      <button class="nav-btn" data-target="view-config">Config</button>
-      <button class="nav-btn" data-target="view-logs">Logs</button>
+      <button class="nav-btn active" data-target="view-dashboard">DASHBOARD</button>
+      <button class="nav-btn" data-target="view-analytics">ANALYTICS</button>
+      <button class="nav-btn" data-target="view-map">MAP</button>
+      <button class="nav-btn" data-target="view-dataset">DATASET</button>
+      <button class="nav-btn" data-target="view-config">CONFIG</button>
+      <button class="nav-btn" data-target="view-logs">LOGS</button>
     </div>
   </header>
 
@@ -1259,6 +1358,49 @@
 
   </main>
 
+  <main id="view-map" class="view-section">
+    <div class="panel" style="height: calc(100vh - 180px); display: flex; flex-direction: column;">
+      <div class="panel-title">
+        <div class="t-icon">🌐</div> Global Network Traffic Map
+      </div>
+      <div
+        style="flex: 1; margin: 15px 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: #000; position: relative;">
+        <div class="map-overlay">
+          <input type="text" id="map-search-input" class="map-input" placeholder="ENTER LOCATION AREA...">
+          <button class="map-btn" onclick="searchLocation()">TARGET</button>
+          <button class="map-btn" style="background: var(--green);" onclick="autoDetectLocation()">AUTO-SCAN</button>
+        </div>
+        <div id="map-container"></div>
+      </div>
+    </div>
+  </main>
+  <main id="view-dataset" class="view-section">
+    <div class="panel" style="height: calc(100vh - 180px); overflow: hidden; display: flex; flex-direction: column;">
+      <div class="panel-title">
+        <div class="t-icon">📊</div> Network Metric Dataset (Excel View)
+      </div>
+      <div style="flex: 1; overflow: auto; margin-top: 15px; border: 1px solid var(--border);">
+        <table id="dataset-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
+          <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10;">
+            <tr>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">TIMESTAMP</th>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">VOIP (K)</th>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">HTTP (M)</th>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">FTP (M)</th>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">DELAY (MS)</th>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">THROUGHPUT</th>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">LOSS (%)</th>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">STATE</th>
+            </tr>
+          </thead>
+          <tbody id="dataset-body">
+            <!-- Rows added via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
   <main id="view-analytics" class="view-section">
     <div class="panel">
       <div class="panel-title">Analytics Engine</div>
@@ -1523,14 +1665,34 @@
 
     // User alerts queue for mock state
     let pendingAlerts = [];
+    let mockDataset = [];
+    let lastMinuteSample = null;
 
-    function applyConfig() {
+    async function applyConfig() {
       activeConfig.voipAlloc = parseInt(document.getElementById('config-voip-alloc').value) || 50;
       activeConfig.threshold = parseFloat(document.getElementById('config-threshold').value) || 0.4;
       activeConfig.ftpPrio = document.getElementById('config-ftp-prio').value || "std";
 
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            voip_alloc: activeConfig.voipAlloc,
+            threshold: activeConfig.threshold,
+            ftp_prio: activeConfig.ftpPrio
+          })
+        });
+        if (res.ok) {
+          const now_str = new Date().toTimeString().slice(0, 8);
+          pendingAlerts.push({ time: now_str, msg: "SYS: Remote QoS Policy Synchronized", cls: "ok" });
+        }
+      } catch (e) {
+        console.warn("Failed to sync config with backend:", e);
+      }
+
       const now_str = new Date().toTimeString().slice(0, 8);
-      pendingAlerts.push({ time: now_str, msg: "USER: QoS Policy Configuration Applied", cls: "ok" });
+      pendingAlerts.push({ time: now_str, msg: "USER: QoS Policy Configuration Applied Locally", cls: "ok" });
     }
 
     function resetConfig() {
@@ -1569,9 +1731,9 @@
       const infer_time = randInt(5, 15);
 
       let state = "low";
-      // Use config threshold
-      if (utilization_ratio >= Math.min(0.9, activeConfig.threshold + 0.35)) state = "high";
-      else if (utilization_ratio >= activeConfig.threshold) state = "med";
+      if (utilization_ratio < activeConfig.threshold) state = "low";
+      else if (utilization_ratio < Math.min(0.95, activeConfig.threshold + 0.35)) state = "med";
+      else state = "high";
 
       let bw_voip = 20, bw_http = 50, bw_ftp = 30;
       let q_voip = 10, q_http = 30, q_ftp = 60;
@@ -1579,8 +1741,8 @@
       if (state === "med") {
         bw_voip = 30; bw_http = 45; bw_ftp = 25;
         q_voip = 20; q_http = 40; q_ftp = 40;
-        if (activeConfig.ftpPrio === "high") { bw_ftp += 10; bw_http -= 10; }
-        if (activeConfig.ftpPrio === "low") { bw_ftp -= 10; bw_http += 10; }
+        if (activeConfig.ftpPrio === "high") { bw_ftp += 10; bw_http -= 10; q_ftp -= 10; q_http += 10; }
+        if (activeConfig.ftpPrio === "low") { bw_ftp -= 10; bw_http += 10; q_ftp += 10; q_http -= 10; }
       } else if (state === "high") {
         // Apply VoIP allocation from config
         bw_voip = activeConfig.voipAlloc;
@@ -1590,7 +1752,7 @@
         bw_ftp = rem - bw_http;
 
         q_voip = 50; q_http = 30; q_ftp = 20;
-        if (activeConfig.ftpPrio === "high") { q_ftp += 15; q_http -= 15; }
+        if (activeConfig.ftpPrio === "high") { q_ftp -= 10; q_http += 10; }
       }
 
       const link_utilization = Math.min(100, Math.floor(utilization_ratio * 100));
@@ -1625,7 +1787,7 @@
         alerts.push({ time: now_str, msg: `Packet loss elevated (${packet_loss.toFixed(1)}%) on background queues`, cls: "warn" });
       }
 
-      return {
+      const metrics = {
         traffic: { voip: Math.round(voip_kbps), http: parseFloat(http_mbps.toFixed(1)), ftp: parseFloat(ftp_mbps.toFixed(1)), aggregate: parseFloat(total_load.toFixed(1)) },
         monitoring: { arrival_rate, delay: parseFloat(base_delay.toFixed(1)), queue_length },
         ml: { state, confidence, infer_time },
@@ -1634,6 +1796,25 @@
         performance: { delay: parseFloat(final_delay.toFixed(1)), throughput: parseFloat(final_tput.toFixed(2)), packet_loss: parseFloat(packet_loss.toFixed(2)) },
         alerts
       };
+
+      // Mock Dataset Sample (1-minute interval)
+      const currentMin = now_str.slice(0, 5); // "HH:MM"
+      if (currentMin !== lastMinuteSample) {
+        mockDataset.unshift({
+          time: now_str,
+          voip: metrics.traffic.voip,
+          http: metrics.traffic.http,
+          ftp: metrics.traffic.ftp,
+          delay: metrics.performance.delay,
+          throughput: metrics.performance.throughput,
+          loss: metrics.performance.loss || metrics.performance.packet_loss,
+          state: metrics.ml.state
+        });
+        if (mockDataset.length > 50) mockDataset.pop();
+        lastMinuteSample = currentMin;
+      }
+
+      return metrics;
     }
 
     // API Data Poll
@@ -1838,10 +2019,48 @@
       }
     }
 
+    async function fetchDataset() {
+      let data;
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/dataset');
+        if (!res.ok) throw new Error("Dataset fetch failed");
+        data = await res.json();
+      } catch (e) {
+        // Fallback to local mock dataset
+        data = mockDataset;
+      }
+
+      const body = document.getElementById('dataset-body');
+      if (!body || !data) return;
+
+      body.innerHTML = '';
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--border)';
+        tr.style.backgroundColor = 'rgba(0,0,0,0.1)';
+
+        const stateColor = row.state === 'high' ? 'var(--red)' : (row.state === 'med' ? 'var(--accent)' : 'var(--green)');
+
+        tr.innerHTML = `
+          <td style="padding: 8px 10px; font-family: 'Share Tech Mono'; color: var(--dim);">${row.time}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.voip}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.http}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.ftp}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.delay}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.throughput}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.loss}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border); color: ${stateColor}; font-weight: bold;">${row.state ? row.state.toUpperCase() : 'UNKNOWN'}</td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
     // Init polling
     window.addEventListener('load', () => {
       setInterval(fetchState, 2000);
+      setInterval(fetchDataset, 4000);
       fetchState();
+      fetchDataset();
     });
 
     // Nav tab interaction
@@ -1858,7 +2077,181 @@
         document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active-view'));
         const targetEl = document.getElementById(targetId);
         if (targetEl) targetEl.classList.add('active-view');
+
+        // Special handling for map resize
+        if (targetId === 'view-map' && window.networkMap) {
+          setTimeout(() => {
+            window.networkMap.invalidateSize();
+          }, 200);
+        }
       });
+    });
+
+    // --- MAP LOGIC ---
+    window.networkMap = null;
+    const hubs = [
+      { name: "BLR-HUB-01", lat: 12.9716, lng: 77.5946 },
+      { name: "MUM-HUB-05", lat: 19.0760, lng: 72.8777 },
+      { name: "DEL-HUB-02", lat: 28.6139, lng: 77.2090 },
+      { name: "HYD-HUB-04", lat: 17.3850, lng: 78.4867 },
+      { name: "CHN-HUB-03", lat: 13.0827, lng: 80.2707 },
+      { name: "KOL-HUB-06", lat: 22.5726, lng: 88.3639 }
+    ];
+
+    function initNetworkMap() {
+      if (window.networkMap) return;
+
+      window.networkMap = L.map('map-container', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([20.5937, 78.9629], 5);
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+      }).addTo(window.networkMap);
+
+      const hubIcon = L.divIcon({
+        className: 'hub-icon-container',
+        html: '<div class="hub-pulse"></div>',
+        iconSize: [20, 20]
+      });
+
+      hubs.forEach(h => {
+        L.marker([h.lat, h.lng], { icon: hubIcon })
+          .addTo(window.networkMap)
+          .bindPopup(`<b style="color:var(--accent)">${h.name}</b><br>Status: OK`);
+      });
+
+      // Dynamic Traffic lines
+      window.trafficLines = [];
+      function updateMapTraffic() {
+        if (!window.networkMap) return;
+
+        // Remove old lines
+        window.trafficLines.forEach(l => window.networkMap.removeLayer(l));
+        window.trafficLines = [];
+
+        // Simple traffic lines (randomly)
+        for (let i = 0; i < hubs.length; i++) {
+          for (let j = i + 1; j < hubs.length; j++) {
+            if (Math.random() > 0.5) {
+              const weight = 1 + Math.random() * 2;
+              const opacity = 0.1 + Math.random() * 0.4;
+              const line = L.polyline([
+                [hubs[i].lat, hubs[i].lng],
+                [hubs[j].lat, hubs[j].lng]
+              ], {
+                color: 'rgba(0, 255, 136, 0.4)',
+                weight: weight,
+                opacity: opacity,
+                dashArray: '5, 10'
+              }).addTo(window.networkMap);
+              window.trafficLines.push(line);
+            }
+          }
+        }
+      }
+
+      setInterval(updateMapTraffic, 3000);
+      updateMapTraffic();
+    }
+
+    async function searchLocation() {
+      if (window.location.protocol === 'file:') {
+        alert("SECURITY ALERT: MAP TARGETING (CORS) IS BLOCKED WHEN OPENED AS A LOCAL FILE.\n\nPLEASE USE THE LOCAL SERVER URL INSTEAD:\nhttp://127.0.0.1:5000");
+        return;
+      }
+
+      const q = document.getElementById('map-search-input').value;
+      if (!q) return;
+
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          // Use user's query as label for cleaner visual
+          focusOnLocation(lat, lon, q.toUpperCase());
+        } else {
+          alert("LOCATION NOT FOUND IN DATABASE.");
+        }
+      } catch (e) {
+        console.warn("Geocoding failed:", e);
+        alert("GEOTARGETING ERROR: UNABLE TO CONNECT TO REMOTE DATABASE.");
+      }
+    }
+
+    function autoDetectLocation() {
+      if (!navigator.geolocation) {
+        alert("GEOLOCATION NOT SUPPORTED BY SYSTEM.");
+        return;
+      }
+
+      const btn = event.target;
+      const originalText = btn.textContent;
+      btn.textContent = "SCANNING...";
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          focusOnLocation(pos.coords.latitude, pos.coords.longitude, "SCAN-DETECTED AREA");
+          btn.textContent = originalText;
+        },
+        (err) => {
+          alert("GEOLOCATION DENIED OR UNAVAILABLE.");
+          btn.textContent = originalText;
+        }
+      );
+    }
+
+    window.userMarker = null;
+    window.localHubs = [];
+
+    function focusOnLocation(lat, lng, label) {
+      if (!window.networkMap) return;
+
+      window.networkMap.setView([lat, lng], 13);
+
+      if (window.userMarker) window.networkMap.removeLayer(window.userMarker);
+
+      const userIcon = L.divIcon({
+        className: 'user-icon-container',
+        html: '<div class="hub-pulse" style="background:var(--red); box-shadow: 0 0 15px var(--red);"></div>',
+        iconSize: [30, 30]
+      });
+
+      window.userMarker = L.marker([lat, lng], { icon: userIcon })
+        .addTo(window.networkMap)
+        .bindPopup(`<b style="color:var(--red)">YOUR LOCATION</b><br>${label}`)
+        .bindTooltip(label, { permanent: true, direction: 'top', className: 'user-tooltip' })
+        .openPopup();
+
+      // Clear old local hubs
+      window.localHubs.forEach(h => window.networkMap.removeLayer(h));
+      window.localHubs = [];
+
+      // Generate localized "Nearby" hubs around the new center
+      for (let i = 0; i < 4; i++) {
+        const dLat = (Math.random() - 0.5) * 0.02;
+        const dLng = (Math.random() - 0.5) * 0.02;
+        const hub = L.marker([lat + dLat, lng + dLng], {
+          icon: L.divIcon({
+            className: 'hub-icon-container',
+            html: '<div class="hub-pulse" style="background:var(--accent); width:8px; height:8px;"></div>',
+            iconSize: [15, 15]
+          })
+        }).addTo(window.networkMap)
+          .bindPopup(`<b>LOCAL-HUB-${Math.floor(Math.random() * 900 + 100)}</b><br>Signal: Strong`);
+        window.localHubs.push(hub);
+      }
+
+      // Update global traffic lines to include new context potentially
+      if (window.updateMapTraffic) window.updateMapTraffic();
+    }
+
+    // Initialize map on load if needed
+    window.addEventListener('load', () => {
+      initNetworkMap();
     });
   </script>
 </body>
