@@ -6,6 +6,7 @@ import math
 import requests as req_lib
 import os
 import psycopg2
+import psutil
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 
@@ -26,6 +27,10 @@ class NetworkState:
             "ftp_prio": "std"
         }
         self.last_minute = None # Track sampling interval
+        
+        # Real Traffic Baseline
+        self.last_net_io = psutil.net_io_counters()
+        self.capacity_mbps = 100.0  # Max assumed local capacity for utilization calcs
         
         # Initialize Supabase DB connection
         self.db_url = os.environ.get("SUPABASE_URL")
@@ -69,38 +74,46 @@ class NetworkState:
     def get_current_metrics(self):
         now = time.time()
         dt = now - self.last_update
-        self.phase += dt * 0.2  # Speed of cycle
+        if dt == 0: dt = 0.001
         self.last_update = now
         
-        # 1. Simulate Traffic Sources (incorporating a sine wave for peak/off-peak cycles)
-        # Base load + sine wave + noise
-        cycle = math.sin(self.phase) # -1 to 1
+        # 1. Real Network Traffic Stats via psutil
+        current_net_io = psutil.net_io_counters()
         
-        # VoIP (Kbps): Fairly steady, slight increase during peaks
-        voip_kbps = max(50, 120 + 40 * cycle + random.uniform(-10, 10))
+        bytes_sent = current_net_io.bytes_sent - self.last_net_io.bytes_sent
+        bytes_recv = current_net_io.bytes_recv - self.last_net_io.bytes_recv
+        self.last_net_io = current_net_io
         
-        # HTTP (Mbps): Highly variable, follows daily cycle strongly
-        http_mbps = max(1.0, 4.0 + 3.0 * cycle + random.uniform(-0.5, 0.5))
+        # Total load in Mbps
+        total_bytes = bytes_sent + bytes_recv
+        total_load_mbps = (total_bytes * 8) / (dt * 1000000)
         
-        # FTP (Mbps): Bursty, less dependent on cycle
-        ftp_mbps = max(0.1, 2.0 + 1.0 * math.sin(self.phase * 0.3) + random.uniform(-0.5, 1.5))
+        # Floor tiny background noise to keep dashboard clean and avoid 0 errors
+        total_load = max(0.01, total_load_mbps)
 
-        # Total load proxy (Mbps)
-        total_load = (voip_kbps / 1000.0) + http_mbps + ftp_mbps
+        # Distribute real load proportionally into our standard traffic bins for UI
+        # Baseline noise usually hits VoIP, heavy hits HTTP/Video
+        if total_load < 1.0:
+            voip_kbps = max(20, total_load * 1000 * 0.4)
+            http_mbps = max(0.1, total_load * 0.5)
+            ftp_mbps = max(0.0, total_load * 0.1)
+        else:
+            voip_kbps = max(50, total_load * 1000 * 0.1 + random.uniform(-10, 10))
+            http_mbps = max(0.5, total_load * 0.7)
+            ftp_mbps = max(0.1, total_load * 0.2)
         
         # 2. Traffic Monitoring / Feature Extraction
         # Arrival rate scales with total load
-        arrival_rate = int(total_load * 120 + random.uniform(-50, 50))
+        arrival_rate = int(total_load * 120 + random.uniform(-5, 5))
         
-        # Base delay increases exponentially as load approaches capacity (Capacity ~ 12 Mbps)
-        capacity = 12.0
-        utilization_ratio = min(0.99, total_load / capacity)
-        base_delay = 5.0 / (1.0 - utilization_ratio) + random.uniform(-2, 2)
+        # Base delay increases exponentially as real load approaches arbitrary capacity
+        utilization_ratio = min(0.99, total_load / self.capacity_mbps)
+        base_delay = 5.0 / (1.0 - utilization_ratio) + random.uniform(-1, 1)
         
         # Queue length builds up when load is high
-        queue_length = int(max(0, (total_load - 5.0) * 50 + random.uniform(0, 20)))
+        queue_length = int(max(0, (total_load - (self.capacity_mbps*0.4)) * 50 + random.uniform(0, 10)))
         
-        # 3. ML for Traffic Network (Simulated Logic)
+        # 3. ML for Traffic Network (Simulated Logic mapping real values)
         confidence = round(random.uniform(85.0, 98.0), 1)
         infer_time = random.randint(5, 15)
         
