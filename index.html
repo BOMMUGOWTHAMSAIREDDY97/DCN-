@@ -2364,57 +2364,84 @@
       };
       const radioLabels = { 'LTE': '4G', 'NR': '5G', 'UMTS': '3G', 'GSM': '2G', 'CDMA': 'CDMA' };
 
-      fetch(`/api/towers?lat=${lat}&lng=${lng}`)
-        .then(r => r.json())
-        .then(data => {
-          const cells = data.cells || [];
-          const foundOps = new Map();
+      const fetchTowers = (url, isProxy) => {
+        return fetch(url, isProxy ? {} : {
+          method: 'POST',
+          body: 'data=' + encodeURIComponent(`[out:json][timeout:20];(node["man_made"="mast"]["communication:mobile_phone"="yes"](around:5000,${lat},${lng});node["man_made"="telecommunications_tower"](around:5000,${lat},${lng});node["tower:type"="communication"](around:5000,${lat},${lng});node["communication:mobile_phone"="yes"](around:5000,${lat},${lng}););out body;`)
+        })
+          .then(r => r.json())
+          .then(data => {
+            const cells = isProxy ? (data.cells || []) : (data.elements || []);
+            const foundOps = new Map();
 
-          cells.forEach(cell => {
-            const mccMnc = `${cell.mcc}-${cell.mnc}`;
-            const opInfo = mncMap[mccMnc] || { name: `MCC${cell.mcc}/MNC${cell.mnc}`, color: '#aaaaaa' };
-            const radio = radioLabels[cell.radio] || cell.radio || 'Unknown';
-            const towerLat = parseFloat(cell.lat);
-            const towerLng = parseFloat(cell.lon);
+            cells.forEach(el => {
+              let opRaw, color, radio, tLat, tLng, infoHtml;
 
-            if (isNaN(towerLat) || isNaN(towerLng)) return;
-            if (!foundOps.has(opInfo.name)) foundOps.set(opInfo.name, opInfo.color);
+              if (isProxy) {
+                const mccMnc = `${el.mcc}-${el.mnc}`;
+                const opInfo = mncMap[mccMnc] || { name: `MCC${el.mcc}/MNC${el.mnc}`, color: '#aaaaaa' };
+                opRaw = opInfo.name;
+                color = opInfo.color;
+                radio = radioLabels[el.radio] || el.radio || 'Unknown';
+                tLat = parseFloat(el.lat);
+                tLng = parseFloat(el.lon);
+                infoHtml = `<div><b>Radio:</b> <span style="color:${color}">${radio}</span></div>
+                          <div><b>Cell ID:</b> ${el.cellid || '?'}</div>
+                          <div><b>LAC:</b> ${el.lac || '?'}</div>
+                          <div><b>MCC/MNC:</b> ${el.mcc}/${el.mnc}</div>`;
+              } else {
+                const tags = el.tags || {};
+                opRaw = tags.operator || tags.network || tags.brand || 'Unknown';
+                const opKey = opRaw.toLowerCase();
+                const colorKey = Object.keys(mncMap).find(k => mncMap[k].name.toLowerCase() === opKey) ||
+                  Object.keys(mncMap).find(k => opKey.includes(mncMap[k].name.toLowerCase()));
+                color = colorKey ? mncMap[colorKey].color : '#aaaaaa';
+                radio = tags['communication:LTE'] === 'yes' ? '4G' : (tags['communication:5GNR'] === 'yes' ? '5G' : 'Unknown');
+                tLat = el.lat;
+                tLng = el.lon;
+                infoHtml = `<div><b>Ref:</b> ${tags.ref || el.id}</div>
+                          <div><b>Type:</b> ${tags['tower:type'] || 'Tower'}</div>
+                          <div><b>Height:</b> ${tags.height || '?'}m</div>`;
+              }
 
-            const towerIcon = L.divIcon({
-              className: '',
-              html: `<div class="tower-icon" style="background:${opInfo.color}22;color:${opInfo.color};border-color:${opInfo.color};">📡</div>`,
-              iconSize: [28, 28], iconAnchor: [14, 14]
+              if (!foundOps.has(opRaw)) foundOps.set(opRaw, color);
+
+              const marker = L.marker([tLat, tLng], {
+                icon: L.divIcon({
+                  className: '',
+                  html: `<div class="tower-icon" style="background:${color}22;color:${color};border-color:${color};">📡</div>`,
+                  iconSize: [28, 28], iconAnchor: [14, 14]
+                })
+              }).addTo(window.networkMap)
+                .bindPopup(`<div style="font-family:'Rajdhani',sans-serif;min-width:175px;">
+                <b style="color:${color};font-size:1rem;">📡 ${opRaw}</b>
+                <hr style="border-color:${color}55;margin:6px 0;">
+                ${infoHtml}
+              </div>`);
+              window.localHubs.push(marker);
             });
 
-            const marker = L.marker([towerLat, towerLng], { icon: towerIcon })
-              .addTo(window.networkMap)
-              .bindPopup(`<div style="font-family:'Rajdhani',sans-serif;min-width:175px;">
-                <b style="color:${opInfo.color};font-size:1rem;">📡 ${opInfo.name}</b>
-                <hr style="border-color:${opInfo.color}55;margin:6px 0;">
-                <div><b>Radio:</b> <span style="color:${opInfo.color}">${radio}</span></div>
-                <div><b>Cell ID:</b> ${cell.cellid || '?'}</div>
-                <div><b>LAC:</b> ${cell.lac || '?'}</div>
-                <div><b>MCC / MNC:</b> ${cell.mcc} / ${cell.mnc}</div>
-                <div><b>Range:</b> ~${cell.range || '?'}m</div>
-              </div>`);
-            window.localHubs.push(marker);
-          });
-
-          if (legend) {
-            if (foundOps.size === 0) {
-              legend.innerHTML = `<h4>📡 Networks</h4><div style="color:#888;font-size:0.72rem;">No towers found in this area<br>on OpenCelliD.</div>`;
-            } else {
-              let rows = '';
-              foundOps.forEach((color, name) => {
-                rows += `<div class="legend-row"><div class="legend-dot" style="background:${color};"></div>${name}</div>`;
-              });
-              legend.innerHTML = `<h4>📡 Networks</h4>${rows}<div style="margin-top:8px;color:#888;font-size:0.7rem;">📶 Click tower for details</div>`;
+            if (legend) {
+              if (foundOps.size === 0) {
+                legend.innerHTML = `<h4>📡 Networks</h4><div style="color:#888;font-size:0.72rem;">No tower data found in this area.</div>`;
+              } else {
+                let rows = '';
+                foundOps.forEach((c, name) => rows += `<div class="legend-row"><div class="legend-dot" style="background:${c};"></div>${name}</div>`);
+                legend.innerHTML = `<h4>📡 Networks</h4>${rows}<div style="margin-top:8px;color:#888;font-size:0.7rem;">📶 Click tower for details</div>`;
+              }
             }
-          }
+          });
+      };
+
+      // Try local proxy (OpenCelliD) first, fallback to Overpass (OSM) for static sites
+      fetch(`/api/towers?lat=${lat}&lng=${lng}`)
+        .then(r => {
+          if (!r.ok) throw new Error('Proxy unavailable');
+          return fetchTowers(`/api/towers?lat=${lat}&lng=${lng}`, true);
         })
-        .catch(err => {
-          console.warn('OpenCelliD error:', err);
-          if (legend) legend.innerHTML = `<h4>📡 Networks</h4><div style="color:#f44;font-size:0.72rem;">⚠ Could not load tower data</div>`;
+        .catch(() => {
+          console.log("Static Mode: Falling back to Overpass API (OSM)");
+          return fetchTowers('https://overpass-api.de/api/interpreter', false);
         });
 
       if (window.updateMapTraffic) window.updateMapTraffic();
