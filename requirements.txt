@@ -1,0 +1,7 @@
+Flask==3.0.3
+Flask-Cors==4.0.0
+psycopg2-binary==2.9.11
+psutil==7.0.0
+python-dotenv==1.0.1
+requests==2.31.0
+gunicorn==21.2.0
