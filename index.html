@@ -1721,6 +1721,11 @@
     }
 
     // Data stores
+    // Auto-detect backend: use Render on live site, localhost when developing
+    const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://127.0.0.1:5000'
+      : 'https://dcn-backend.onrender.com'; // <-- REPLACE with your actual Render URL
+
     const N = 40;
     let delayData = Array.from({ length: N }, () => 10 + Math.random() * 8);
     let tputData = Array.from({ length: N }, () => 4 + Math.random() * 1.5);
@@ -1749,7 +1754,7 @@
       activeConfig.ftpPrio = document.getElementById('config-ftp-prio').value || "std";
 
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/config', {
+        const res = await fetch(`${BACKEND_URL}/api/config`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1912,7 +1917,7 @@
     async function fetchState() {
       let data;
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/status');
+        const res = await fetch(`${BACKEND_URL}/api/status`);
         if (!res.ok) throw new Error("HTTP Request Failed");
         data = await res.json();
       } catch (e) {
@@ -2113,7 +2118,7 @@
     async function fetchDataset() {
       let data;
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/dataset');
+        const res = await fetch(`${BACKEND_URL}/api/dataset`);
         if (!res.ok) throw new Error("Dataset fetch failed");
         data = await res.json();
       } catch (e) {
