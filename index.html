@@ -2281,8 +2281,21 @@
           alert("LOCATION NOT FOUND IN DATABASE.");
         }
       } catch (e) {
-        console.warn("Geocoding failed:", e);
-        alert("GEOTARGETING ERROR: UNABLE TO CONNECT TO REMOTE DATABASE.");
+        console.warn("Primary geocoding failed, trying ArcGIS fallback:", e);
+        try {
+          const arcgisUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(location)}`;
+          const r2 = await fetch(arcgisUrl);
+          const d2 = await r2.json();
+          if (d2.candidates && d2.candidates.length > 0) {
+            const best = d2.candidates[0];
+            focusOnLocation(best.location.y, best.location.x, best.address);
+          } else {
+            alert("LOCATION NOT FOUND IN DATABASE.");
+          }
+        } catch (e2) {
+          console.error("All geocoding failed:", e2);
+          alert("GEOTARGETING ERROR: UNABLE TO CONNECT TO REMOTE DATABASE.");
+        }
       }
     }
 
@@ -2364,12 +2377,28 @@
       };
       const radioLabels = { 'LTE': '4G', 'NR': '5G', 'UMTS': '3G', 'GSM': '2G', 'CDMA': 'CDMA' };
 
+      const overpassServers = [
+        'https://overpass-api.de/api/interpreter',
+        'https://overpass.kumi.systems/api/interpreter',
+        'https://lz4.overpass-api.de/api/interpreter',
+        'https://z.overpass-api.de/api/interpreter'
+      ];
+      let serverIdx = 0;
+
       const fetchTowers = (url, isProxy) => {
         return fetch(url, isProxy ? {} : {
           method: 'POST',
-          body: 'data=' + encodeURIComponent(`[out:json][timeout:20];(node["man_made"="mast"]["communication:mobile_phone"="yes"](around:5000,${lat},${lng});node["man_made"="telecommunications_tower"](around:5000,${lat},${lng});node["tower:type"="communication"](around:5000,${lat},${lng});node["communication:mobile_phone"="yes"](around:5000,${lat},${lng}););out body;`)
+          body: 'data=' + encodeURIComponent(`[out:json][timeout:25];(node["man_made"="mast"]["communication:mobile_phone"="yes"](around:5000,${lat},${lng});node["man_made"="telecommunications_tower"](around:5000,${lat},${lng});node["tower:type"="communication"](around:5000,${lat},${lng});node["communication:mobile_phone"="yes"](around:5000,${lat},${lng}););out body;`)
         })
-          .then(r => r.json())
+          .then(async r => {
+            if (r.status === 429 && !isProxy && serverIdx < overpassServers.length - 1) {
+              serverIdx++;
+              console.log(`Rate limited. Retrying with server ${serverIdx}...`);
+              return fetchTowers(overpassServers[serverIdx], false);
+            }
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+          })
           .then(data => {
             const cells = isProxy ? (data.cells || []) : (data.elements || []);
             const foundOps = new Map();
@@ -2430,6 +2459,13 @@
                 legend.innerHTML = `<h4>📡 Networks</h4>${rows}<div style="margin-top:8px;color:#888;font-size:0.7rem;">📶 Click tower for details</div>`;
               }
             }
+          })
+          .catch(err => {
+            console.error("Tower fetch failed:", err);
+            if (legend && legend.innerHTML.includes("Scanning")) {
+              legend.innerHTML = `<h4>📡 Networks</h4><div style="color:#f44;font-size:0.72rem;">⚠ Network servers busy. Retrying...</div>`;
+              setTimeout(() => { if (legend.innerHTML.includes("busy")) fetchTowers(overpassServers[0], false); }, 5000);
+            }
           });
       };
 
@@ -2440,8 +2476,8 @@
           return fetchTowers(`/api/towers?lat=${lat}&lng=${lng}`, true);
         })
         .catch(() => {
-          console.log("Static Mode: Falling back to Overpass API (OSM)");
-          return fetchTowers('https://overpass-api.de/api/interpreter', false);
+          console.log("Static Mode: Using Overpass API cluster");
+          return fetchTowers(overpassServers[0], false);
         });
 
       if (window.updateMapTraffic) window.updateMapTraffic();
