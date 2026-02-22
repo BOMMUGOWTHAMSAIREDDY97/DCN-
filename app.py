@@ -4,6 +4,12 @@ import time
 import random
 import math
 import requests as req_lib
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables before initializing classes
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -19,8 +25,46 @@ class NetworkState:
             "threshold": 0.4,
             "ftp_prio": "std"
         }
-        self.dataset = [] # Stores history for "Excel" view
         self.last_minute = None # Track sampling interval
+        
+        # Initialize Supabase DB connection
+        self.db_url = os.environ.get("SUPABASE_URL")
+        self._init_db()
+
+    def _get_db_connection(self):
+        if not self.db_url:
+            return None
+        try:
+            return psycopg2.connect(self.db_url)
+        except Exception as e:
+            print(f"Error connecting to database: {e}")
+            return None
+
+    def _init_db(self):
+        conn = self._get_db_connection()
+        if not conn: return
+        
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS network_logs (
+                        id SERIAL PRIMARY KEY,
+                        timestamp TIMESTAMPTZ DEFAULT NOW(),
+                        time_str VARCHAR(10),
+                        voip_kbps INTEGER,
+                        http_mbps FLOAT,
+                        ftp_mbps FLOAT,
+                        delay_ms FLOAT,
+                        throughput_gbps FLOAT,
+                        packet_loss_pct FLOAT,
+                        state VARCHAR(10)
+                    );
+                """)
+            conn.commit()
+        except Exception as e:
+            print(f"Error initializing database table: {e}")
+        finally:
+            conn.close()
         
     def get_current_metrics(self):
         now = time.time()
@@ -175,20 +219,26 @@ class NetworkState:
         # Append to dataset history at 1-minute intervals
         current_min = time.strftime("%H:%M")
         if current_min != self.last_minute:
-            snapshot = {
-                "time": now_str,
-                "voip": round(voip_kbps),
-                "http": round(http_mbps, 1),
-                "ftp": round(ftp_mbps, 1),
-                "delay": round(final_delay, 1),
-                "throughput": round(final_tput, 2),
-                "loss": round(packet_loss, 2),
-                "state": state
-            }
-            self.dataset.insert(0, snapshot) # Latest first
-            if len(self.dataset) > 100:
-                self.dataset.pop()
             self.last_minute = current_min
+            
+            # Save to Database
+            conn = self._get_db_connection()
+            if conn:
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO network_logs 
+                            (time_str, voip_kbps, http_mbps, ftp_mbps, delay_ms, throughput_gbps, packet_loss_pct, state)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (
+                            now_str, round(voip_kbps), round(http_mbps, 1), round(ftp_mbps, 1), 
+                            round(final_delay, 1), round(final_tput, 2), round(packet_loss, 2), state
+                        ))
+                    conn.commit()
+                except Exception as e:
+                    print(f"Error inserting into DB: {e}")
+                finally:
+                    conn.close()
             
         return metrics_data
 
@@ -240,7 +290,34 @@ def update_config():
 
 @app.route('/api/dataset', methods=['GET'])
 def get_dataset():
-    return jsonify(state_manager.dataset)
+    # Fetch from Supabase
+    conn = state_manager._get_db_connection()
+    if not conn:
+        return jsonify({"error": "No database connection"}), 500
+        
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    time_str as time, 
+                    voip_kbps as voip, 
+                    http_mbps as http, 
+                    ftp_mbps as ftp,
+                    delay_ms as delay, 
+                    throughput_gbps as throughput, 
+                    packet_loss_pct as loss, 
+                    state 
+                FROM network_logs 
+                ORDER BY timestamp DESC 
+                LIMIT 100
+            """)
+            rows = cur.fetchall()
+        return jsonify(rows)
+    except Exception as e:
+        print(f"Error fetching logs: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
