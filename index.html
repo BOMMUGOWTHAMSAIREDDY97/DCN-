@@ -2269,31 +2269,42 @@
       const q = document.getElementById('map-search-input').value;
       if (!q) return;
 
+      const isLive = window.location.hostname.includes('github.io');
+
+      // If live, prioritize ArcGIS to avoid Nominatim CORS blocks
+      if (isLive) {
+        try {
+          const arcgisUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(q)}&maxLocations=1`;
+          const r = await fetch(arcgisUrl);
+          const d = await r.json();
+          if (d.candidates && d.candidates.length > 0) {
+            const best = d.candidates[0];
+            focusOnLocation(best.location.y, best.location.x, best.address);
+            return;
+          }
+        } catch (e) { console.warn("ArcGIS failed, trying Nominatim legacy..."); }
+      }
+
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
         const data = await res.json();
         if (data && data.length > 0) {
-          const lat = parseFloat(data[0].lat);
-          const lon = parseFloat(data[0].lon);
-          // Use user's query as label for cleaner visual
-          focusOnLocation(lat, lon, q.toUpperCase());
+          focusOnLocation(parseFloat(data[0].lat), parseFloat(data[0].lon), q.toUpperCase());
         } else {
-          alert("LOCATION NOT FOUND IN DATABASE.");
+          // One last attempt with ArcGIS if Nominatim had no results
+          if (!isLive) throw new Error("No result");
+          alert("LOCATION NOT FOUND.");
         }
       } catch (e) {
-        console.warn("Primary geocoding failed, trying ArcGIS fallback:", e);
+        console.warn("Geocoding fetch failed, trying fallback...");
         try {
-          const arcgisUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(location)}`;
-          const r2 = await fetch(arcgisUrl);
+          const r2 = await fetch(`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(q)}&maxLocations=1`);
           const d2 = await r2.json();
           if (d2.candidates && d2.candidates.length > 0) {
             const best = d2.candidates[0];
             focusOnLocation(best.location.y, best.location.x, best.address);
-          } else {
-            alert("LOCATION NOT FOUND IN DATABASE.");
-          }
+          } else { alert("LOCATION NOT FOUND."); }
         } catch (e2) {
-          console.error("All geocoding failed:", e2);
           alert("GEOTARGETING ERROR: UNABLE TO CONNECT TO REMOTE DATABASE.");
         }
       }
