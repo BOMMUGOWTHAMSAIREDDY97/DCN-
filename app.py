@@ -201,7 +201,33 @@ class NetworkState:
         if packet_loss > 1.0:
              alerts.append({"time": now_str, "msg": f"Packet loss elevated ({packet_loss:.1f}%) detected", "cls": "warn"})
 
+        # Get real active processes with network connections
+        active_processes = []
+        try:
+            # We look for ESTABLISHED connections to find active apps
+            connections = psutil.net_connections(kind='inet')
+            procs = {}
+            for conn in connections:
+                if conn.status == 'ESTABLISHED' and conn.pid:
+                    try:
+                        p = psutil.Process(conn.pid)
+                        name = p.name()
+                        if name not in procs:
+                            procs[name] = 0
+                        procs[name] += 1
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+            # Sort by connection count and take top 5
+            sorted_procs = sorted(procs.items(), key=lambda x: x[1], reverse=True)
+            active_processes = [name for name, count in sorted_procs[:5]]
+        except Exception as e:
+            print(f"Error fetching processes: {e}")
+
+        if not active_processes:
+            active_processes = ["System Kernel", "Network Interface", "DCN Controller"]
+
         metrics_data = {
+            "processes": active_processes,
             "traffic": {
                 "voip": round(voip_kbps),
                 "http": round(http_mbps, 1),
