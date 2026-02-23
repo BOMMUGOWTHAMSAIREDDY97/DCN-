@@ -1961,10 +1961,24 @@
         tr.style.borderBottom = '1px solid var(--border)';
         tr.style.backgroundColor = 'rgba(0,0,0,0.1)';
 
+        // Use the raw timestamp if available to handle timezone conversion to local browser time
+        let displayTime = row.time;
+        if (row.timestamp) {
+          try {
+            const date = new Date(row.timestamp);
+            // Check if valid date
+            if (!isNaN(date.getTime())) {
+              displayTime = date.toLocaleTimeString([], { hour12: false });
+            }
+          } catch (e) {
+            console.warn("Failed to parse row timestamp:", e);
+          }
+        }
+
         const stateColor = row.state === 'high' ? 'var(--red)' : (row.state === 'med' ? 'var(--accent)' : 'var(--green)');
 
         tr.innerHTML = `
-          <td style="padding: 8px 10px; font-family: 'Share Tech Mono'; color: var(--dim);">${row.time}</td>
+          <td style="padding: 8px 10px; font-family: 'Share Tech Mono'; color: var(--dim);">${displayTime}</td>
           <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.voip}</td>
           <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.http}</td>
           <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.ftp}</td>
