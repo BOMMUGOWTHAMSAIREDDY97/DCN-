@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import joblib
 import pandas as pd
 import threading
+from datetime import datetime, timezone
 
 load_dotenv()  # Load environment variables before initializing classes
 
@@ -88,7 +89,8 @@ class NetworkState:
         tput = metrics['performance']['throughput']
         loss = metrics['performance']['packet_loss']
         state = metrics['ml']['state']
-        now_str = time.strftime("%H:%M:%S")
+        now = datetime.now(timezone.utc)
+        now_str = now.strftime("%H:%M:%S")
 
         conn = self._get_db_connection()
         if conn:
@@ -96,10 +98,10 @@ class NetworkState:
                 with conn.cursor() as cur:
                     cur.execute("""
                         INSERT INTO network_logs 
-                        (time_str, voip_kbps, http_mbps, ftp_mbps, delay_ms, throughput_gbps, packet_loss_pct, state)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        (timestamp, time_str, voip_kbps, http_mbps, ftp_mbps, delay_ms, throughput_gbps, packet_loss_pct, state)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
-                        now_str, voip, http, ftp, delay, tput, loss, state
+                        now, now_str, voip, http, ftp, delay, tput, loss, state
                     ))
                 conn.commit()
                 # print(f"Background log entry created at {now_str}")
@@ -391,7 +393,7 @@ def get_dataset():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT 
-                    timestamp,
+                    to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as timestamp,
                     time_str as time, 
                     voip_kbps as voip, 
                     http_mbps as http, 
@@ -404,7 +406,7 @@ def get_dataset():
                 ORDER BY timestamp DESC 
                 LIMIT 100
             """)
-            rows = cur.fetchall()
+            rows = [dict(row) for row in cur.fetchall()]
         return jsonify(rows)
     except Exception as e:
         print(f"Error fetching logs: {e}")

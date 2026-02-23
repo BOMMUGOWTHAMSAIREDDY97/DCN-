@@ -1442,8 +1442,18 @@
   </main>
   <main id="view-dataset" class="view-section">
     <div class="panel" style="height: calc(100vh - 180px); overflow: hidden; display: flex; flex-direction: column;">
-      <div class="panel-title">
-        <div class="t-icon">📊</div> Network Metric Dataset (Excel View)
+      <div class="panel-title" style="display: flex; align-items: center; justify-content: space-between;">
+        <span>
+          <div class="t-icon" style="display:inline-block;">📊</div> Network Metric Dataset (Excel View)
+        </span>
+        <span style="font-size:0.75rem; color:var(--dim); font-family:'Share Tech Mono',monospace;">
+          <span id="dataset-row-count">Loading...</span>
+          &nbsp;|&nbsp;
+          Last sync: <span id="dataset-last-updated">—</span>
+          &nbsp;
+          <button class="nav-btn" style="padding:3px 10px; font-size:0.7rem;" onclick="fetchDataset()">↻
+            REFRESH</button>
+        </span>
       </div>
       <div style="flex: 1; overflow: auto; margin-top: 15px; border: 1px solid var(--border);">
         <table id="dataset-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
@@ -1942,18 +1952,28 @@
     }
 
     async function fetchDataset() {
+      const countEl = document.getElementById('dataset-row-count');
+      const lastUpdEl = document.getElementById('dataset-last-updated');
+      if (countEl) countEl.textContent = 'Fetching...';
+
       let data;
       try {
         const res = await fetch(`${BACKEND_URL}/api/dataset`);
-        if (!res.ok) throw new Error("Dataset fetch failed");
+        if (!res.ok) throw new Error("Dataset fetch failed: " + res.status);
         data = await res.json();
       } catch (e) {
-        // Fallback to local mock dataset
-        data = mockDataset;
+        console.error('fetchDataset error:', e);
+        if (countEl) countEl.textContent = '⚠ Fetch failed';
+        return;
+      }
+
+      if (!Array.isArray(data) || data.length === 0) {
+        if (countEl) countEl.textContent = 'No data in DB yet';
+        return;
       }
 
       const body = document.getElementById('dataset-body');
-      if (!body || !data) return;
+      if (!body) return;
 
       body.innerHTML = '';
       data.forEach(row => {
@@ -1962,11 +1982,10 @@
         tr.style.backgroundColor = 'rgba(0,0,0,0.1)';
 
         // Use the raw timestamp if available to handle timezone conversion to local browser time
-        let displayTime = row.time;
+        let displayTime = row.time || '—';
         if (row.timestamp) {
           try {
             const date = new Date(row.timestamp);
-            // Check if valid date
             if (!isNaN(date.getTime())) {
               displayTime = date.toLocaleTimeString([], { hour12: false });
             }
@@ -1979,16 +1998,19 @@
 
         tr.innerHTML = `
           <td style="padding: 8px 10px; font-family: 'Share Tech Mono'; color: var(--dim);">${displayTime}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.voip}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.http}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.ftp}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.delay}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.throughput}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.loss}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border); color: ${stateColor}; font-weight: bold;">${row.state ? row.state.toUpperCase() : 'UNKNOWN'}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.voip !== undefined ? row.voip : '—'}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.http !== undefined ? row.http : '—'}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.ftp !== undefined ? row.ftp : '—'}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.delay !== undefined ? row.delay : '—'}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.throughput !== undefined ? row.throughput : '—'}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.loss !== undefined ? row.loss : '—'}</td>
+          <td style="padding: 8px 10px; border-left: 1px solid var(--border); color: ${stateColor}; font-weight: bold;">${row.state ? row.state.toUpperCase() : '—'}</td>
         `;
         body.appendChild(tr);
       });
+
+      if (countEl) countEl.textContent = `${data.length} rows`;
+      if (lastUpdEl) lastUpdEl.textContent = new Date().toLocaleTimeString([], { hour12: false });
     }
 
     // Init polling
