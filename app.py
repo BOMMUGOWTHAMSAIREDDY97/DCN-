@@ -46,8 +46,8 @@ class NetworkState:
             print(f"Error loading model: {e}")
             self.model = None
 
-        # Thread safety for shared state
-        self.lock = threading.Lock()
+        # Thread safety for shared state (Using RLock to prevent deadlock)
+        self.lock = threading.RLock()
         
         # Start Background Logging Thread
         self.bg_thread = threading.Thread(target=self._background_logger, daemon=True)
@@ -77,37 +77,36 @@ class NetworkState:
 
     def _log_to_db(self):
         """Calculates metrics and inserts into Supabase."""
-        with self.lock:
-            # We need to trigger get_current_metrics to get fresh data
-            # but we don't return the JSON to anyone
-            metrics = self.get_current_metrics(internal=True)
-            
-            voip = metrics['traffic']['voip']
-            http = metrics['traffic']['http']
-            ftp = metrics['traffic']['ftp']
-            delay = metrics['performance']['delay']
-            tput = metrics['performance']['throughput']
-            loss = metrics['performance']['packet_loss']
-            state = metrics['ml']['state']
-            now_str = time.strftime("%H:%M:%S")
+        # We don't need redundant locking here because get_current_metrics 
+        # already handles its own internal locking.
+        metrics = self.get_current_metrics(internal=True)
+        
+        voip = metrics['traffic']['voip']
+        http = metrics['traffic']['http']
+        ftp = metrics['traffic']['ftp']
+        delay = metrics['performance']['delay']
+        tput = metrics['performance']['throughput']
+        loss = metrics['performance']['packet_loss']
+        state = metrics['ml']['state']
+        now_str = time.strftime("%H:%M:%S")
 
-            conn = self._get_db_connection()
-            if conn:
-                try:
-                    with conn.cursor() as cur:
-                        cur.execute("""
-                            INSERT INTO network_logs 
-                            (time_str, voip_kbps, http_mbps, ftp_mbps, delay_ms, throughput_gbps, packet_loss_pct, state)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (
-                            now_str, voip, http, ftp, delay, tput, loss, state
-                        ))
-                    conn.commit()
-                    # print(f"Background log entry created at {now_str}")
-                except Exception as e:
-                    print(f"Error inserting into DB: {e}")
-                finally:
-                    conn.close()
+        conn = self._get_db_connection()
+        if conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO network_logs 
+                        (time_str, voip_kbps, http_mbps, ftp_mbps, delay_ms, throughput_gbps, packet_loss_pct, state)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        now_str, voip, http, ftp, delay, tput, loss, state
+                    ))
+                conn.commit()
+                # print(f"Background log entry created at {now_str}")
+            except Exception as e:
+                print(f"Error inserting into DB: {e}")
+            finally:
+                conn.close()
 
     def _get_db_connection(self):
         if not self.db_url:
