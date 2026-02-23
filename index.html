@@ -1237,41 +1237,43 @@
               <div class="q-bar-bg">
                 <div class="q-bar" id="q1" style="width:85%"></div>
               </div>
-              <span style="font-size:0.7rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">VoIP</span>
+              <span style="font-size:0.7rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">Priority</span>
             </div>
             <div class="queue-row">
               <span class="q-num">2</span>
               <div class="q-bar-bg">
                 <div class="q-bar" id="q2" style="width:60%"></div>
               </div>
-              <span style="font-size:0.7rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">HTTP</span>
+              <span style="font-size:0.7rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">Standard</span>
             </div>
             <div class="queue-row">
               <span class="q-num">3</span>
               <div class="q-bar-bg">
                 <div class="q-bar" id="q3" style="width:40%"></div>
               </div>
-              <span style="font-size:0.7rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">FTP</span>
+              <span style="font-size:0.7rem;color:var(--dim);font-family:'Share Tech Mono',monospace;">Bulk</span>
             </div>
           </div>
           <div class="qos-sub">
             <div class="qos-sub-title">Bandwidth Allocation</div>
             <div class="bw-item">
-              <div class="bw-label"><span>VoIP</span><span class="bw-val" id="bw1">40%</span></div>
+              <div class="bw-label"><span>Active Priority Flows</span><span class="bw-val" id="voip-val">45 Kbps</span>
+              </div>
               <div class="bw-bar-bg">
-                <div class="bw-fill" id="bwf1" style="width:40%"></div>
+                <div class="bw-fill" id="voip-bar" style="width:25%; background: var(--green);"></div>
               </div>
             </div>
             <div class="bw-item">
-              <div class="bw-label"><span>HTTP</span><span class="bw-val" id="bw2">35%</span></div>
+              <div class="bw-label"><span>Standard Data</span><span class="bw-val" id="http-val">2.4 Mbps</span></div>
               <div class="bw-bar-bg">
-                <div class="bw-fill" id="bwf2" style="width:35%"></div>
+                <div class="bw-fill" id="http-bar" style="width:45%; background: var(--accent);"></div>
               </div>
             </div>
             <div class="bw-item">
-              <div class="bw-label"><span>FTP</span><span class="bw-val" id="bw3">25%</span></div>
+              <div class="bw-label"><span>Bulk / Background Transfers</span><span class="bw-val" id="ftp-val">1.2
+                  Mbps</span></div>
               <div class="bw-bar-bg">
-                <div class="bw-fill" id="bwf3" style="width:25%"></div>
+                <div class="bw-fill" id="ftp-bar" style="width:30%; background: var(--yellow);"></div>
               </div>
             </div>
           </div>
@@ -1336,18 +1338,7 @@
       <div class="alert-feed panel">
         <div class="panel-title" style="color:var(--red);">⬡ Event Log</div>
         <div class="alert-list" id="alert-list">
-          <div class="alert-item"><span class="alert-time">08:14:02</span><span class="alert-msg ok">QoS policy updated
-              — Low congestion</span></div>
-          <div class="alert-item"><span class="alert-time">08:13:47</span><span class="alert-msg">Feature vector
-              extracted successfully</span></div>
-          <div class="alert-item"><span class="alert-time">08:13:31</span><span class="alert-msg warn">Queue depth
-              approaching threshold</span></div>
-          <div class="alert-item"><span class="alert-time">08:13:10</span><span class="alert-msg">Bandwidth reallocated
-              — HTTP +5%</span></div>
-          <div class="alert-item"><span class="alert-time">08:12:55</span><span class="alert-msg crit">High congestion
-              predicted — action taken</span></div>
-          <div class="alert-item"><span class="alert-time">08:12:30</span><span class="alert-msg">ML model inference:
-              11ms</span></div>
+          <!-- Live alerts from system -->
         </div>
       </div>
 
@@ -1459,9 +1450,12 @@
           <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10;">
             <tr>
               <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">TIMESTAMP</th>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">VOIP (K)</th>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">HTTP (M)</th>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">FTP (M)</th>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">PRIORITY FLOW (K)
+              </th>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">STANDARD FLOW (M)
+              </th>
+              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">BULK FLOW (M)
+              </th>
               <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">DELAY (MS)</th>
               <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">THROUGHPUT</th>
               <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">LOSS (%)</th>
@@ -1574,10 +1568,10 @@
     </div>
     <div
       style="padding: 0 20px 20px 20px; font-size: 0.75rem; color: var(--dim); font-family: 'Share Tech Mono', monospace; display: flex; gap: 20px;">
-      <span><strong style="color:var(--accent);">POLICY:</strong> Edu-Priority-V2</span>
-      <span><strong style="color:var(--accent);">DPI ENGINE:</strong> Active (Layer 7 Inspection)</span>
-      <span style="margin-left:auto;">System actively dropping entertainment UDP packets to preserve Quality of
-        Service for Educational platforms.</span>
+      <span><strong style="color:var(--accent);">POLICY:</strong> RealTime-QoS-v1</span>
+      <span><strong style="color:var(--accent);">NET ENGINE:</strong> Active (System Telemetry)</span>
+      <span style="margin-left:auto;">System actively monitoring real-time network states to preserve Quality of Service
+        for priority flows.</span>
     </div>
     </div>
   </main>
@@ -1591,9 +1585,9 @@
           <div
             style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(10,64,96,0.3); padding-bottom: 10px;">
             <div style="display: flex; flex-direction: column;">
-              <label style="font-weight: 600;">VoIP Protection Allocation</label>
-              <span style="font-size: 0.7rem; color: var(--dim); margin-top: 4px;">Guaranteed bandwidth percentage
-                during High Congestion</span>
+              <label style="font-weight: 600;">System Priority Reservation</label>
+              <span style="font-size: 0.7rem; color: var(--dim); margin-top: 4px;">Guaranteed bandwidth percentage for
+                critical flows during High Congestion</span>
             </div>
             <input type="range" id="config-voip-alloc" min="10" max="80" value="50" style="width: 150px;">
           </div>
@@ -1776,6 +1770,8 @@
         // Fallback to standalone mode if backend is not running
         data = getMockState();
       }
+
+      if (!data) return; // Prevention for null data parsing
 
       try {
         // Update Charts Data
