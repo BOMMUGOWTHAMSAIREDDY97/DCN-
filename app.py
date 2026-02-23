@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, send_from_directory, request as flask_request
 from flask_cors import CORS
 import time
-import random
 import math
 import requests as req_lib
 import os
@@ -108,28 +107,35 @@ class NetworkState:
             http_mbps = max(0.1, total_load * 0.5)
             ftp_mbps = max(0.0, total_load * 0.1)
         else:
-            voip_kbps = max(50, total_load * 1000 * 0.1 + random.uniform(-10, 10))
+            voip_kbps = max(50, total_load * 1000 * 0.1)
             http_mbps = max(0.5, total_load * 0.7)
             ftp_mbps = max(0.1, total_load * 0.2)
         
         # 2. Traffic Monitoring / Feature Extraction
         # Arrival rate scales with total load
-        arrival_rate = int(total_load * 120 + random.uniform(-5, 5))
+        arrival_rate = int(total_load * 120)
         
         # Base delay increases exponentially as real load approaches arbitrary capacity
         utilization_ratio = min(0.99, total_load / self.capacity_mbps)
-        base_delay = 5.0 / (1.0 - utilization_ratio) + random.uniform(-1, 1)
+        base_delay = 5.0 / (1.0 - utilization_ratio)
         
         # Queue length builds up when load is high
-        queue_length = int(max(0, (total_load - (self.capacity_mbps*0.4)) * 50 + random.uniform(0, 10)))
+        queue_length = int(max(0, (total_load - (self.capacity_mbps*0.4)) * 50))
         
         # 3. Decision Tree ML for Traffic Network
+        start_time = time.perf_counter()
         if self.model:
             # Prepare features for prediction
             features = pd.DataFrame([[total_load, base_delay, queue_length, arrival_rate]], 
                                     columns=['load_mbps', 'delay_ms', 'queue_length', 'arrival_rate'])
             state = self.model.predict(features)[0]
-            confidence = round(random.uniform(92.0, 99.0), 1) # ML model usually has higher confidence
+            
+            # Use probability for confidence if available
+            try:
+                probs = self.model.predict_proba(features)[0]
+                confidence = round(max(probs) * 100, 1)
+            except:
+                confidence = 95.0
         else:
             # Fallback to threshold logic if model not loaded
             if utilization_ratio < self.config['threshold']:
@@ -138,9 +144,9 @@ class NetworkState:
                 state = "med"
             else:
                 state = "high"
-            confidence = round(random.uniform(85.0, 95.0), 1)
+            confidence = 80.0
             
-        infer_time = random.randint(5, 15)
+        infer_time = round((time.perf_counter() - start_time) * 1000, 2)
 
         # 4. Adaptive QoS Controller (Resource Allocation)
         if state == "low":
@@ -174,45 +180,26 @@ class NetworkState:
         if state == "high":
             # QoS is acting to save VoIP but overall delay is high, loss happens mainly on FTP
             final_delay = base_delay * 0.8  # QoS managed it slightly better than raw
-            packet_loss = 0.5 + (utilization_ratio - 0.75) * 5.0 + random.uniform(0, 0.5)
+            packet_loss = 0.5 + (utilization_ratio - 0.75) * 5.0
         elif state == "med":
             final_delay = base_delay * 0.9
-            packet_loss = random.uniform(0.05, 0.3)
+            packet_loss = 0.1
         else:
             final_delay = base_delay
-            packet_loss = random.uniform(0.01, 0.05)
+            packet_loss = 0.02
             
         final_tput = total_load * (1.0 - packet_loss/100.0)
 
-        # Generate Alerts based on state transitions or thresholds
+        # Generate Alerts based on actual state transitions or thresholds
         alerts = []
         now_str = time.strftime("%H:%M:%S")
         if utilization_ratio > 0.85:
             alerts.append({"time": now_str, "msg": "Critical link utilization detected > 85%", "cls": "crit"})
         elif state == "high":
             alerts.append({"time": now_str, "msg": f"QoS active: VoIP bandwidth increased to {bw_voip}%", "cls": "warn"})
-        elif state == "low" and random.random() < 0.1:
-            alerts.append({"time": now_str, "msg": "Nominal traffic conditions - Policy reset", "cls": "ok"})
             
         if packet_loss > 1.0:
-             alerts.append({"time": now_str, "msg": f"Packet loss elevated ({packet_loss:.1f}%) on background queues", "cls": "warn"})
-
-        if random.random() < 0.2:
-            websites = [
-                ("Netflix / YouTube 4K", random.uniform(5.0, 25.0)),
-                ("Coursera / edX", random.uniform(2.0, 8.0)),
-                ("Canvas / Moodle CMS", random.uniform(1.0, 5.0)),
-                ("TikTok / Instagram Reels", random.uniform(3.0, 15.0)),
-                ("Steam Game Downloads", random.uniform(20.0, 80.0)),
-                ("Wikipedia / Web Browsing", random.uniform(0.1, 2.0)),
-                ("Zoom / Teams Video call", random.uniform(1.5, 4.0))
-            ]
-            site, speed = random.choice(websites)
-            if state == "low":
-                speed *= 1.2
-            elif state == "high":
-                speed *= 0.3
-            alerts.append({"time": now_str, "msg": f"DPI Engine: {site} flow detected consuming {speed:.1f} Mbps", "cls": ""})
+             alerts.append({"time": now_str, "msg": f"Packet loss elevated ({packet_loss:.1f}%) detected", "cls": "warn"})
 
         metrics_data = {
             "traffic": {
