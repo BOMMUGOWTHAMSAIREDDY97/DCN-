@@ -78,43 +78,46 @@ class NetworkState:
 
     def _log_to_db(self):
         """Calculates metrics and inserts into Supabase."""
-        # We don't need redundant locking here because get_current_metrics 
-        # already handles its own internal locking.
-        metrics = self.get_current_metrics(internal=True)
-        
-        voip = metrics['traffic']['voip']
-        http = metrics['traffic']['http']
-        ftp = metrics['traffic']['ftp']
-        delay = metrics['performance']['delay']
-        tput = metrics['performance']['throughput']
-        loss = metrics['performance']['packet_loss']
-        state = metrics['ml']['state']
-        now = datetime.now(timezone.utc)
-        now_str = now.strftime("%H:%M:%S")
+        try:
+            metrics = self.get_current_metrics(internal=True)
+            if not metrics:
+                return
 
-        conn = self._get_db_connection()
-        if conn:
-            try:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO network_logs 
-                        (timestamp, time_str, voip_kbps, http_mbps, ftp_mbps, delay_ms, throughput_gbps, packet_loss_pct, state)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        now, now_str, voip, http, ftp, delay, tput, loss, state
-                    ))
-                conn.commit()
-                # print(f"Background log entry created at {now_str}")
-            except Exception as e:
-                print(f"Error inserting into DB: {e}")
-            finally:
-                conn.close()
+            voip = metrics['traffic']['voip']
+            http = metrics['traffic']['http']
+            ftp = metrics['traffic']['ftp']
+            delay = metrics['performance']['delay']
+            tput = metrics['performance']['throughput']
+            loss = metrics['performance']['packet_loss']
+            state = metrics['ml']['state']
+            now = datetime.now(timezone.utc)
+            now_str = now.strftime("%H:%M:%S")
+
+            conn = self._get_db_connection()
+            if conn:
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO network_logs 
+                            (timestamp, time_str, voip_kbps, http_mbps, ftp_mbps, delay_ms, throughput_gbps, packet_loss_pct, state)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (
+                            now, now_str, voip, http, ftp, delay, tput, loss, state
+                        ))
+                    conn.commit()
+                except Exception as e:
+                    print(f"Error inserting into DB: {e}")
+                finally:
+                    conn.close()
+        except Exception as e:
+            print(f"Error in _log_to_db: {e}")
 
     def _get_db_connection(self):
         if not self.db_url:
             return None
         try:
-            return psycopg2.connect(self.db_url)
+            # Added connection timeout to prevent perpetual hangs
+            return psycopg2.connect(self.db_url, connect_timeout=10)
         except Exception as e:
             print(f"Error connecting to database: {e}")
             return None
@@ -415,5 +418,5 @@ def get_dataset():
         conn.close()
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5002))
     app.run(debug=False, host='0.0.0.0', port=port)

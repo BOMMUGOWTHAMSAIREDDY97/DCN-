@@ -1092,9 +1092,9 @@
           VoIP
         </div>
         <div class="t-bar-wrap">
-          <span class="t-val" id="voip-val">142 Kbps</span>
+          <span class="t-val" id="t-voip-val">142 Kbps</span>
           <div class="t-bar">
-            <div class="t-fill" id="voip-bar" style="width:35%"></div>
+            <div class="t-fill" id="t-voip-bar" style="width:35%"></div>
           </div>
         </div>
       </div>
@@ -1104,9 +1104,9 @@
           HTTP
         </div>
         <div class="t-bar-wrap">
-          <span class="t-val" id="http-val">4.7 Mbps</span>
+          <span class="t-val" id="t-http-val">4.7 Mbps</span>
           <div class="t-bar">
-            <div class="t-fill" id="http-bar" style="width:72%"></div>
+            <div class="t-fill" id="t-http-bar" style="width:72%"></div>
           </div>
         </div>
       </div>
@@ -1116,9 +1116,9 @@
           FTP
         </div>
         <div class="t-bar-wrap">
-          <span class="t-val" id="ftp-val">2.1 Mbps</span>
+          <span class="t-val" id="t-ftp-val">2.1 Mbps</span>
           <div class="t-bar">
-            <div class="t-fill" id="ftp-bar" style="width:52%"></div>
+            <div class="t-fill" id="t-ftp-bar" style="width:52%"></div>
           </div>
         </div>
       </div>
@@ -1257,23 +1257,23 @@
           <div class="qos-sub">
             <div class="qos-sub-title">Bandwidth Allocation</div>
             <div class="bw-item">
-              <div class="bw-label"><span>Active Priority Flows</span><span class="bw-val" id="voip-val">45 Kbps</span>
+              <div class="bw-label"><span>Active Priority Flows</span><span class="bw-val" id="bw1">50%</span>
               </div>
               <div class="bw-bar-bg">
-                <div class="bw-fill" id="voip-bar" style="width:25%; background: var(--green);"></div>
-              </div>
-            </div>
-            <div class="bw-item">
-              <div class="bw-label"><span>Standard Data</span><span class="bw-val" id="http-val">2.4 Mbps</span></div>
-              <div class="bw-bar-bg">
-                <div class="bw-fill" id="http-bar" style="width:45%; background: var(--accent);"></div>
+                <div class="bw-fill" id="bwf1" style="width:25%; background: var(--green);"></div>
               </div>
             </div>
             <div class="bw-item">
-              <div class="bw-label"><span>Bulk / Background Transfers</span><span class="bw-val" id="ftp-val">1.2
-                  Mbps</span></div>
+              <div class="bw-label"><span>Standard Data</span><span class="bw-val" id="bw2">35%</span></div>
               <div class="bw-bar-bg">
-                <div class="bw-fill" id="ftp-bar" style="width:30%; background: var(--yellow);"></div>
+                <div class="bw-fill" id="bwf2" style="width:45%; background: var(--accent);"></div>
+              </div>
+            </div>
+            <div class="bw-item">
+              <div class="bw-label"><span>Bulk / Background Transfers</span><span class="bw-val" id="bw3">15%</span>
+              </div>
+              <div class="bw-bar-bg">
+                <div class="bw-fill" id="bwf3" style="width:30%; background: var(--yellow);"></div>
               </div>
             </div>
           </div>
@@ -1566,9 +1566,20 @@
           <div
             style="font-size: 0.85rem; color: var(--dim); line-height: 1.6; border: 1px dashed var(--border); padding: 15px;">
             <p>The Decision Tree model analyzes these real-time flows and OS telemetry to predict congestion.</p>
-            <p style="margin-top: 10px; color:var(--text);">Current Policy:
-              <span id="active-policy-desc" style="color:var(--accent);">Balancing system throughput and application
-                latency.</span>
+            <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <span style="color:var(--dim); font-size: 0.7rem; text-transform: uppercase;">Confidence</span><br>
+                <span id="qos-intel-conf" style="color:var(--green); font-family: 'Share Tech Mono';">--%</span>
+              </div>
+              <div>
+                <span style="color:var(--dim); font-size: 0.7rem; text-transform: uppercase;">Latency</span><br>
+                <span id="qos-intel-time" style="color:var(--accent); font-family: 'Share Tech Mono';">--ms</span>
+              </div>
+            </div>
+            <p
+              style="margin-top: 10px; color:var(--text); border-top: 1px solid rgba(10,64,96,0.3); padding-top: 10px;">
+              Current Policy:
+              <span id="active-policy-desc" style="color:var(--accent);">Initializing...</span>
             </p>
           </div>
         </div>
@@ -1702,9 +1713,11 @@
 
     // Data stores
     // Auto-detect backend: use Render on live site, localhost when developing
-    const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://127.0.0.1:5000'
-      : 'https://dcn-2.onrender.com';
+    const BACKEND_URL = (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.protocol === 'file:'
+    ) ? 'http://127.0.0.1:5002' : 'https://dcn-2.onrender.com';
 
     const N = 40;
     let delayData = Array.from({ length: N }, () => 10 + Math.random() * 8);
@@ -1733,6 +1746,8 @@
       activeConfig.threshold = parseFloat(document.getElementById('config-threshold').value) || 0.4;
       activeConfig.ftpPrio = document.getElementById('config-ftp-prio').value || "std";
 
+      const now_str = new Date().toTimeString().slice(0, 8);
+
       try {
         const res = await fetch(`${BACKEND_URL}/api/config`, {
           method: 'POST',
@@ -1744,14 +1759,15 @@
           })
         });
         if (res.ok) {
-          const now_str = new Date().toTimeString().slice(0, 8);
           pendingAlerts.push({ time: now_str, msg: "SYS: Remote QoS Policy Synchronized", cls: "ok" });
+        } else {
+          pendingAlerts.push({ time: now_str, msg: "ERR: Failed to update remote policy", cls: "crit" });
         }
       } catch (e) {
         console.warn("Failed to sync config with backend:", e);
+        pendingAlerts.push({ time: now_str, msg: "ERR: Connection Lost while applying policy", cls: "crit" });
       }
 
-      const now_str = new Date().toTimeString().slice(0, 8);
       pendingAlerts.push({ time: now_str, msg: "USER: QoS Policy Configuration Applied Locally", cls: "ok" });
     }
 
@@ -1784,41 +1800,83 @@
       if (!data) return; // Prevention for null data parsing
 
       try {
-        // Update Charts Data
+        // 1. Process alerts from backend + user actions (High Priority)
+        const allAlerts = [...(data.alerts || []), ...pendingAlerts];
+        pendingAlerts = []; // Clear queue after processing
+
+        if (allAlerts.length > 0) {
+          const list = document.getElementById('alert-list');
+          const fullList = document.getElementById('full-log-list');
+          allAlerts.forEach(msg => {
+            const item = document.createElement('div');
+            item.className = 'alert-item';
+            item.innerHTML = `<span class="alert-time" style="width:80px; display:inline-block; color:var(--dim);">${msg.time}</span><span class="alert-msg ${msg.cls || ''}">${msg.msg}</span>`;
+
+            if (list) {
+              list.insertBefore(item.cloneNode(true), list.firstChild);
+              if (list.children.length > 8) list.removeChild(list.lastChild);
+            }
+
+            if (fullList) {
+              const logItem = item.cloneNode(true);
+              logItem.style.borderBottom = '1px solid rgba(10,64,96,0.3)';
+              logItem.style.padding = '8px 0';
+              fullList.insertBefore(logItem, fullList.firstChild);
+              if (fullList.children.length > 200) fullList.removeChild(fullList.lastChild);
+            }
+          });
+        }
+
+        // 2. Update Charts Data
         delayData.push(data.performance.delay); delayData.shift();
         tputData.push(data.performance.throughput); tputData.shift();
         lossData.push(data.performance.packet_loss); lossData.shift();
         trafficData.push(data.traffic.aggregate); trafficData.shift();
 
-        drawSparkline(document.getElementById('delayChart'), delayData, '#00ff88', true);
-        drawSparkline(document.getElementById('tputChart'), tputData, '#00d4ff', true);
-        drawSparkline(document.getElementById('lossChart'), lossData, '#ffb700', true);
-        drawSparkline(document.getElementById('trafficChart'), trafficData, '#00d4ff', true);
+        const delayChart = document.getElementById('delayChart');
+        if (delayChart) drawSparkline(delayChart, delayData, '#00ff88', true);
+        const tputChart = document.getElementById('tputChart');
+        if (tputChart) drawSparkline(tputChart, tputData, '#00d4ff', true);
+        const lossChart = document.getElementById('lossChart');
+        if (lossChart) drawSparkline(lossChart, lossData, '#ffb700', true);
+        const trafficChart = document.getElementById('trafficChart');
+        if (trafficChart) drawSparkline(trafficChart, trafficData, '#00d4ff', true);
 
-        // Performance Values
-        document.getElementById('delay-val').textContent = data.monitoring.delay.toFixed(1);
-        document.getElementById('perf-delay').textContent = data.performance.delay.toFixed(1) + ' ms';
-        document.getElementById('perf-tput').textContent = data.performance.throughput.toFixed(2) + ' Gbps';
-        document.getElementById('perf-loss').textContent = data.performance.packet_loss.toFixed(2) + '%';
+        // 3. Performance Values
+        const elDelayVal = document.getElementById('delay-val');
+        if (elDelayVal) elDelayVal.textContent = data.monitoring.delay.toFixed(1);
+        const elPerfDelay = document.getElementById('perf-delay');
+        if (elPerfDelay) elPerfDelay.textContent = data.performance.delay.toFixed(1) + ' ms';
+        const elPerfTput = document.getElementById('perf-tput');
+        if (elPerfTput) elPerfTput.textContent = data.performance.throughput.toFixed(2) + ' Gbps';
+        const elPerfLoss = document.getElementById('perf-loss');
+        if (elPerfLoss) elPerfLoss.textContent = data.performance.packet_loss.toFixed(2) + '%';
 
-        // Traffic Sources
-        document.getElementById('voip-val').textContent = data.traffic.voip + ' Kbps';
-        document.getElementById('voip-bar').style.width = Math.min(100, (data.traffic.voip / 200 * 100)) + '%';
-        document.getElementById('http-val').textContent = data.traffic.http.toFixed(1) + ' Mbps';
-        document.getElementById('http-bar').style.width = Math.min(100, (data.traffic.http / 12 * 100)) + '%';
-        document.getElementById('ftp-val').textContent = data.traffic.ftp.toFixed(1) + ' Mbps';
-        document.getElementById('ftp-bar').style.width = Math.min(100, (data.traffic.ftp / 5 * 100)) + '%';
+        // 4. Traffic Sources
+        const elTVoipVal = document.getElementById('t-voip-val');
+        if (elTVoipVal) elTVoipVal.textContent = data.traffic.voip + ' Kbps';
+        const elTVoipBar = document.getElementById('t-voip-bar');
+        if (elTVoipBar) elTVoipBar.style.width = Math.min(100, (data.traffic.voip / 200 * 100)) + '%';
+        const elTHttpVal = document.getElementById('t-http-val');
+        if (elTHttpVal) elTHttpVal.textContent = data.traffic.http.toFixed(1) + ' Mbps';
+        const elTHttpBar = document.getElementById('t-http-bar');
+        if (elTHttpBar) elTHttpBar.style.width = Math.min(100, (data.traffic.http / 12 * 100)) + '%';
+        const elTFtpVal = document.getElementById('t-ftp-val');
+        if (elTFtpVal) elTFtpVal.textContent = data.traffic.ftp.toFixed(1) + ' Mbps';
+        const elTFtpBar = document.getElementById('t-ftp-bar');
+        if (elTFtpBar) elTFtpBar.style.width = Math.min(100, (data.traffic.ftp / 5 * 100)) + '%';
 
-        // Monitoring
-        document.getElementById('arrival-rate').textContent = data.monitoring.arrival_rate;
-        document.getElementById('queue-val').textContent = data.monitoring.queue_length;
+        // 5. Monitoring
+        const elArrivalRate = document.getElementById('arrival-rate');
+        if (elArrivalRate) elArrivalRate.textContent = data.monitoring.arrival_rate;
+        const elQueueVal = document.getElementById('queue-val');
+        if (elQueueVal) elQueueVal.textContent = data.monitoring.queue_length;
 
-        // Feature Extraction Animation
+        // 6. Feature Extraction Animation
         const statusEl = document.getElementById('extraction-status');
         const vectorEl = document.getElementById('feature-vector');
         const progressEl = document.getElementById('feature-progress');
         const appEl = document.getElementById('extraction-app');
-        const tags = ['feat-jitter', 'feat-tput', 'feat-loss', 'feat-rtt', 'feat-burst'];
         if (statusEl && vectorEl && progressEl && appEl) {
           statusEl.textContent = "EXTRACTING";
           statusEl.style.color = "var(--accent)";
@@ -1832,7 +1890,6 @@
             progressEl.style.left = "100%";
           }, 50);
 
-          // Use real data from backend if available for identified app
           setTimeout(() => {
             statusEl.textContent = "COMPLETE (L7)";
             statusEl.style.color = "var(--green)";
@@ -1840,45 +1897,44 @@
             appEl.textContent = identified;
             appEl.style.color = 'var(--green)';
 
-            // Generate a more realistic feature vector based on load
             const base = (data.traffic.aggregate / 100);
             const vec = Array.from({ length: 5 }, () => (base * (0.8 + Math.random() * 0.4)).toFixed(2));
             vectorEl.textContent = `[${vec.join(', ')}]`;
           }, 1600);
         }
 
-        // ML Predictor Animation Logic continua after...
+        // 7. ML Predictor
         ['low', 'med', 'high'].forEach(s => {
-          document.getElementById('state-' + s).classList.toggle('active-state', s === data.ml.state);
+          const el = document.getElementById('state-' + s);
+          if (el) el.classList.toggle('active-state', s === data.ml.state);
         });
-        document.getElementById('confidence').textContent = data.ml.confidence + '%';
-        document.getElementById('infer-time').textContent = data.ml.infer_time + 'ms';
+        const elConfidence = document.getElementById('confidence');
+        if (elConfidence) elConfidence.textContent = data.ml.confidence + '%';
+        const elInferTime = document.getElementById('infer-time');
+        if (elInferTime) elInferTime.textContent = data.ml.infer_time + 'ms';
 
-        // Analytics Engine Animation
+        // 8. Analytics Engine Animation
         const accuracySpan = document.getElementById('analytics-accuracy');
         const inferSpan = document.getElementById('analytics-infer');
         if (accuracySpan && inferSpan) {
-          // Fluctuate accuracy slightly around 96.8
           const rAcc = 96.0 + Math.random() * 1.5;
           accuracySpan.textContent = rAcc.toFixed(1) + '%';
-          // Fluctuate inference time
           const rInf = Math.floor(8 + Math.random() * 6);
           inferSpan.textContent = '~' + rInf + 'ms';
 
-          // Randomly flash status to "RETRAINING..." briefly
-          const statusEl = document.getElementById('analytics-status');
-          if (statusEl) {
+          const sStatusEl = document.getElementById('analytics-status');
+          if (sStatusEl) {
             if (Math.random() < 0.1) {
-              statusEl.textContent = "ENGINE ACTIVE: RETRAINING MODEL...";
-              statusEl.style.color = "var(--accent)";
+              sStatusEl.textContent = "ENGINE ACTIVE: RETRAINING MODEL...";
+              sStatusEl.style.color = "var(--accent)";
             } else {
-              statusEl.textContent = "ENGINE ACTIVE: CONTINUOUS LEARNING PIPELINE";
-              statusEl.style.color = "var(--green)";
+              sStatusEl.textContent = "ENGINE ACTIVE: CONTINUOUS LEARNING PIPELINE";
+              sStatusEl.style.color = "var(--green)";
             }
           }
         }
 
-        // Real-time Processes Panel Update
+        // 9. Real-time Processes Panel Update
         const procListBody = document.getElementById('active-processes-list');
         if (procListBody && data.processes) {
           procListBody.innerHTML = '';
@@ -1886,12 +1942,9 @@
             const div = document.createElement('div');
             div.className = 'bw-item';
             div.style.marginBottom = '16px';
-
-            // Random-looking but deterministic load based on name to make it look active
             const hash = proc.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
             const loadPerc = 10 + (hash % 60) * (data.traffic.aggregate / 110.0);
             const mbps = (loadPerc * 0.8).toFixed(1);
-
             div.innerHTML = `
               <div class="bw-label"><span style="color: var(--text);">${proc}</span><span class="bw-val">${mbps} Mbps</span></div>
               <div class="bw-bar-bg" style="height: 10px; border-radius: 4px;">
@@ -1901,51 +1954,46 @@
             procListBody.appendChild(div);
           });
 
-          document.getElementById('active-policy-desc').textContent = data.ml.state === 'high' ?
-            "CRITICAL CONGESTION: Restricting background throughput to preserve low-latency channels." :
-            "NOMINAL LOAD: Optimized for maximum system-wide link utilization.";
+          const elPolicyDesc = document.getElementById('active-policy-desc');
+          if (elPolicyDesc) {
+            elPolicyDesc.textContent = data.ml.state === 'high' ?
+              "CRITICAL CONGESTION: Restricting background throughput to preserve low-latency channels." :
+              "NOMINAL LOAD: Optimized for maximum system-wide link utilization.";
+          }
         }
 
-        // Adaptive QoS Controllers
+        // 10. Adaptive QoS Controllers
         const qos = data.qos;
-        document.getElementById('q1').style.width = qos.queues.voip + '%';
-        document.getElementById('q2').style.width = qos.queues.http + '%';
-        document.getElementById('q3').style.width = qos.queues.ftp + '%';
-        document.getElementById('bw1').textContent = qos.bandwidth.voip + '%';
-        document.getElementById('bwf1').style.width = qos.bandwidth.voip + '%';
-        document.getElementById('bw2').textContent = qos.bandwidth.http + '%';
-        document.getElementById('bwf2').style.width = qos.bandwidth.http + '%';
-        document.getElementById('bw3').textContent = qos.bandwidth.ftp + '%';
-        document.getElementById('bwf3').style.width = qos.bandwidth.ftp + '%';
+        const q1 = document.getElementById('q1'); if (q1) q1.style.width = qos.queues.voip + '%';
+        const q2 = document.getElementById('q2'); if (q2) q2.style.width = qos.queues.http + '%';
+        const q3 = document.getElementById('q3'); if (q3) q3.style.width = qos.queues.ftp + '%';
 
-        // Router Utilization
-        document.getElementById('link-util').textContent = data.router.link_utilization + '%';
-        document.getElementById('link-fill').style.width = data.router.link_utilization + '%';
-        document.getElementById('queue-occ').textContent = data.router.queue_occupancy + '%';
-        document.getElementById('queue-fill').style.width = data.router.queue_occupancy + '%';
+        const bw1 = document.getElementById('bw1'); if (bw1) bw1.textContent = qos.bandwidth.voip + '%';
+        const bwf1 = document.getElementById('bwf1'); if (bwf1) bwf1.style.width = qos.bandwidth.voip + '%';
+        const bw2 = document.getElementById('bw2'); if (bw2) bw2.textContent = qos.bandwidth.http + '%';
+        const bwf2 = document.getElementById('bwf2'); if (bwf2) bwf2.style.width = qos.bandwidth.http + '%';
+        const bw3 = document.getElementById('bw3'); if (bw3) bw3.textContent = qos.bandwidth.ftp + '%';
+        const bwf3 = document.getElementById('bwf3'); if (bwf3) bwf3.style.width = qos.bandwidth.ftp + '%';
 
-        // Alerts
-        if (data.alerts && data.alerts.length > 0) {
-          const list = document.getElementById('alert-list');
-          const fullList = document.getElementById('full-log-list');
-          data.alerts.forEach(msg => {
-            const item = document.createElement('div');
-            item.className = 'alert-item';
-            item.innerHTML = `<span class="alert-time" style="width:80px; display:inline-block; color:var(--dim);">${msg.time}</span><span class="alert-msg ${msg.cls}">${msg.msg}</span>`;
-            list.insertBefore(item, list.firstChild);
-            if (list.children.length > 8) list.removeChild(list.lastChild);
+        // 11. Router Utilization
+        const elLinkUtil = document.getElementById('link-util');
+        if (elLinkUtil) elLinkUtil.textContent = data.router.link_utilization + '%';
+        const elLinkFill = document.getElementById('link-fill');
+        if (elLinkFill) elLinkFill.style.width = data.router.link_utilization + '%';
+        const elQueueOcc = document.getElementById('queue-occ');
+        if (elQueueOcc) elQueueOcc.textContent = data.router.queue_occupancy + '%';
+        const elQueueFill = document.getElementById('queue-fill');
+        if (elQueueFill) elQueueFill.style.width = data.router.queue_occupancy + '%';
 
-            if (fullList) {
-              const logItem = document.createElement('div');
-              logItem.className = 'alert-item';
-              logItem.style.borderBottom = '1px solid rgba(10,64,96,0.3)';
-              logItem.style.padding = '8px 0';
-              logItem.innerHTML = item.innerHTML;
-              fullList.insertBefore(logItem, fullList.firstChild);
-              if (fullList.children.length > 200) fullList.removeChild(fullList.lastChild);
-            }
-          });
-        }
+        // 12. Update secondary QoS panel
+        const qIntConf = document.getElementById('qos-intel-conf');
+        const qIntTime = document.getElementById('qos-intel-time');
+        if (qIntConf) qIntConf.textContent = data.ml.confidence + '%';
+        if (qIntTime) qIntTime.textContent = data.ml.infer_time + 'ms';
+
+        // 13. Heartbeat indicator
+        const hbStatus = document.getElementById('proc-sync-status');
+        if (hbStatus) hbStatus.textContent = "Status: SYNC " + new Date().toTimeString().slice(0, 8);
       } catch (e) {
         console.warn("Error processing data:", e);
       }
@@ -2163,7 +2211,7 @@
 
     async function searchLocation() {
       if (window.location.protocol === 'file:') {
-        alert("SECURITY ALERT: MAP TARGETING (CORS) IS BLOCKED WHEN OPENED AS A LOCAL FILE.\n\nPLEASE USE THE LOCAL SERVER URL INSTEAD:\nhttp://127.0.0.1:5000");
+        alert("SECURITY ALERT: MAP TARGETING (CORS) IS BLOCKED WHEN OPENED AS A LOCAL FILE.\n\nPLEASE USE THE LOCAL SERVER URL INSTEAD:\nhttp://127.0.0.1:5002");
         return;
       }
 
@@ -2384,10 +2432,10 @@
       };
 
       // Try local proxy (OpenCelliD) first, fallback to Overpass (OSM) for static sites
-      fetch(`http://127.0.0.1:5000/api/towers?lat=${lat}&lng=${lng}`)
+      fetch(`http://127.0.0.1:5002/api/towers?lat=${lat}&lng=${lng}`)
         .then(r => {
           if (!r.ok) throw new Error('Proxy unavailable');
-          return fetchTowers(`http://127.0.0.1:5000/api/towers?lat=${lat}&lng=${lng}`, true);
+          return fetchTowers(`http://127.0.0.1:5002/api/towers?lat=${lat}&lng=${lng}`, true);
         })
         .catch(() => {
           console.log("Static Mode: Using Overpass API cluster");
