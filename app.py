@@ -119,7 +119,7 @@ class NetworkState:
             tput = metrics['performance']['throughput']
             loss = metrics['performance']['packet_loss']
             state = metrics['ml']['state']
-            now = datetime.now(timezone.utc)
+            now = datetime.now()
             now_str = now.strftime("%H:%M:%S")
 
             conn = self._get_db_connection()
@@ -278,7 +278,7 @@ class NetworkState:
     
                 # Generate Alerts based on actual state transitions or thresholds
                 alerts = []
-                now_str = time.strftime("%H:%M:%S")
+                now_str = datetime.now().strftime("%H:%M:%S")
 
                 # State Transition Alerts
                 if state != self.last_state:
@@ -420,7 +420,7 @@ def get_dataset():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT 
-                    to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as timestamp,
+                    timestamp,
                     time_str as time, 
                     voip_kbps as voip, 
                     http_mbps as http, 

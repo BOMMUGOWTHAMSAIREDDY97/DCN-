@@ -1443,41 +1443,36 @@
   <main id="view-dataset" class="view-section">
     <div class="panel" style="height: calc(100vh - 180px); overflow: hidden; display: flex; flex-direction: column;">
       <div class="panel-title" style="display: flex; align-items: center; justify-content: space-between;">
-        <span>
-          <div class="t-icon" style="display:inline-block;">📊</div> Network Metric Dataset (Excel View)
-        </span>
-        <span style="font-size:0.75rem; color:var(--dim); font-family:'Share Tech Mono',monospace;">
-          <span id="dataset-row-count">Loading...</span>
-          &nbsp;|&nbsp;
-          Last sync: <span id="dataset-last-updated">—</span>
-          &nbsp;
-          <button class="nav-btn" style="padding:3px 10px; font-size:0.7rem;" onclick="fetchDataset()">↻
-            REFRESH</button>
-        </span>
+        <div class="panel-title">
+          <div class="t-icon" style="display:inline-block;">📊</div> Network Metric Dataset (Excel View) | <span
+            style="color:var(--yellow)">LOCAL TIME</span>
+        </div>
+        <div style="flex: 1; overflow: auto; margin-top: 15px; border: 1px solid var(--border);">
+          <table id="dataset-table"
+            style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
+            <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10;">
+              <tr>
+                <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">TIMESTAMP</th>
+                <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">PRIORITY FLOW
+                  (K)
+                </th>
+                <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">STANDARD FLOW
+                  (M)
+                </th>
+                <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">BULK FLOW (M)
+                </th>
+                <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">DELAY (MS)</th>
+                <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">THROUGHPUT</th>
+                <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">LOSS (%)</th>
+                <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">STATE</th>
+              </tr>
+            </thead>
+            <tbody id="dataset-body">
+              <!-- Rows added via JS -->
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div style="flex: 1; overflow: auto; margin-top: 15px; border: 1px solid var(--border);">
-        <table id="dataset-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
-          <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10;">
-            <tr>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">TIMESTAMP</th>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">PRIORITY FLOW (K)
-              </th>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">STANDARD FLOW (M)
-              </th>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">BULK FLOW (M)
-              </th>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">DELAY (MS)</th>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">THROUGHPUT</th>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">LOSS (%)</th>
-              <th style="padding: 10px; border-bottom: 2px solid var(--accent); color: var(--accent);">STATE</th>
-            </tr>
-          </thead>
-          <tbody id="dataset-body">
-            <!-- Rows added via JS -->
-          </tbody>
-        </table>
-      </div>
-    </div>
   </main>
 
   <main id="view-analytics" class="view-section">
@@ -2051,16 +2046,16 @@
         tr.style.borderBottom = '1px solid var(--border)';
         tr.style.backgroundColor = 'rgba(0,0,0,0.1)';
 
-        // Handle local timezone conversion precisely
+        // Detect if the server time matches laptop 23:xx or is still stuck in 17:xx
         let displayTime = row.time || '—';
         if (row.timestamp) {
           try {
-            // Force Z if missing to ensure Date treats it as UTC
-            let ts = row.timestamp;
-            if (!ts.endsWith('Z') && !ts.includes('+')) ts += 'Z';
-            const date = new Date(ts);
+            const date = new Date(row.timestamp);
             if (!isNaN(date.getTime())) {
-              displayTime = date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              // Ensure we show it in local format
+              displayTime = date.getHours().toString().padStart(2, '0') + ':' +
+                date.getMinutes().toString().padStart(2, '0') + ':' +
+                date.getSeconds().toString().padStart(2, '0');
             }
           } catch (e) {
             console.warn("Time parse error:", e);
