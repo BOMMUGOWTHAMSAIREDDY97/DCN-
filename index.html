@@ -1716,6 +1716,9 @@
     const BACKEND_URL = (
       window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.startsWith('192.168.') ||
+      window.location.hostname.startsWith('10.') ||
+      window.location.hostname.startsWith('172.') ||
       window.location.protocol === 'file:'
     ) ? 'http://127.0.0.1:5002' : 'https://dcn-2.onrender.com';
 
@@ -1742,11 +1745,17 @@
     let lastMinuteSample = null;
 
     async function applyConfig() {
+      const btn = event.target;
+      const originalText = btn.textContent;
+      btn.textContent = "SYNCHRONIZING...";
+      btn.disabled = true;
+
       activeConfig.voipAlloc = parseInt(document.getElementById('config-voip-alloc').value) || 50;
       activeConfig.threshold = parseFloat(document.getElementById('config-threshold').value) || 0.4;
       activeConfig.ftpPrio = document.getElementById('config-ftp-prio').value || "std";
 
       const now_str = new Date().toTimeString().slice(0, 8);
+      console.log("Applying Config to:", BACKEND_URL, activeConfig);
 
       try {
         const res = await fetch(`${BACKEND_URL}/api/config`, {
@@ -1759,16 +1768,17 @@
           })
         });
         if (res.ok) {
-          pendingAlerts.push({ time: now_str, msg: "SYS: Remote QoS Policy Synchronized", cls: "ok" });
+          pendingAlerts.push({ time: now_str, msg: "SYSTEM: QoS Policy successfully synchronized with DCN Controller", cls: "ok" });
         } else {
-          pendingAlerts.push({ time: now_str, msg: "ERR: Failed to update remote policy", cls: "crit" });
+          throw new Error("Server returned " + res.status);
         }
       } catch (e) {
-        console.warn("Failed to sync config with backend:", e);
-        pendingAlerts.push({ time: now_str, msg: "ERR: Connection Lost while applying policy", cls: "crit" });
+        console.error("Config Sync Error:", e);
+        pendingAlerts.push({ time: now_str, msg: "ERROR: Controller Sync Failed. Operating in Local Override mode.", cls: "crit" });
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
       }
-
-      pendingAlerts.push({ time: now_str, msg: "USER: QoS Policy Configuration Applied Locally", cls: "ok" });
     }
 
     function resetConfig() {
@@ -1806,8 +1816,8 @@
 
         // Filter out unwanted chatter (DPI logs and Nominal status)
         allAlerts = allAlerts.filter(msg => {
-          const m = msg.msg || "";
-          return !m.includes("DPI Engine") && !m.includes("Nominal traffic");
+          const m = (msg.msg || "").toLowerCase();
+          return !m.includes("dpi engine") && !m.includes("nominal traffic");
         });
 
         if (allAlerts.length > 0) {
@@ -2041,16 +2051,19 @@
         tr.style.borderBottom = '1px solid var(--border)';
         tr.style.backgroundColor = 'rgba(0,0,0,0.1)';
 
-        // Use the raw timestamp if available to handle timezone conversion to local browser time
+        // Handle local timezone conversion precisely
         let displayTime = row.time || '—';
         if (row.timestamp) {
           try {
-            const date = new Date(row.timestamp);
+            // Force Z if missing to ensure Date treats it as UTC
+            let ts = row.timestamp;
+            if (!ts.endsWith('Z') && !ts.includes('+')) ts += 'Z';
+            const date = new Date(ts);
             if (!isNaN(date.getTime())) {
-              displayTime = date.toLocaleTimeString([], { hour12: false });
+              displayTime = date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
             }
           } catch (e) {
-            console.warn("Failed to parse row timestamp:", e);
+            console.warn("Time parse error:", e);
           }
         }
 
