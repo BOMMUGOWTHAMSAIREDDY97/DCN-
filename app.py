@@ -30,10 +30,12 @@ class NetworkState:
             "ftp_prio": "std"
         }
         self.last_minute = None # Track sampling interval
+        self.last_state = "low" # Track state transitions to prevent alert spam
         
         # Real Traffic Baseline
         self.last_net_io = psutil.net_io_counters()
         self.capacity_mbps = 100.0  # Max assumed local capacity for utilization calcs
+        self.current_load_mbps = 0.05
         
         # Initialize Supabase DB connection
         self.db_url = os.environ.get("SUPABASE_URL")
@@ -50,10 +52,37 @@ class NetworkState:
         # Thread safety for shared state (Using RLock to prevent deadlock)
         self.lock = threading.RLock()
         
-        # Start Background Logging Thread
+        # Start Background Threads
         self.bg_thread = threading.Thread(target=self._background_logger, daemon=True)
         self.bg_thread.start()
-        print("Background Logging Thread started")
+        
+        self.traffic_thread = threading.Thread(target=self._traffic_monitor, daemon=True)
+        self.traffic_thread.start()
+        
+        print("Background Threads (Logger & Traffic) started")
+
+    def _traffic_monitor(self):
+        """Continuously samples network IO every 2 seconds to calculate a stable Mbps rate."""
+        while True:
+            try:
+                t1 = time.time()
+                io1 = psutil.net_io_counters()
+                time.sleep(2)
+                t2 = time.time()
+                io2 = psutil.net_io_counters()
+                
+                dt = t2 - t1
+                bytes_sent = io2.bytes_sent - io1.bytes_sent
+                bytes_recv = io2.bytes_recv - io1.bytes_recv
+                
+                with self.lock:
+                    self.current_load_mbps = ((bytes_sent + bytes_recv) * 8) / (dt * 1000000)
+                    # Smoothly decay if 0, but keep at least a tiny baseline
+                    self.current_load_mbps = max(0.01, self.current_load_mbps)
+                    
+            except Exception as e:
+                print(f"Error in traffic monitor: {e}")
+                time.sleep(5)
 
     def _background_logger(self):
         """Infinite loop to log metrics aligned to 60-second minute boundaries."""
@@ -154,23 +183,8 @@ class NetworkState:
         # Consistent locking for both internal and external callers
         try:
             with self.lock:
-                dt = now - self.last_update
-                if dt == 0: dt = 0.001
-                self.last_update = now
-                
-                # 1. Real Network Traffic Stats via psutil
-                current_net_io = psutil.net_io_counters()
-                
-                bytes_sent = current_net_io.bytes_sent - self.last_net_io.bytes_sent
-                bytes_recv = current_net_io.bytes_recv - self.last_net_io.bytes_recv
-                self.last_net_io = current_net_io
-                
-                # Total load in Mbps
-                total_bytes = bytes_sent + bytes_recv
-                total_load_mbps = (total_bytes * 8) / (dt * 1000000)
-                
-                # Floor tiny background noise to keep dashboard clean and avoid 0 errors
-                total_load = max(0.01, total_load_mbps)
+                # 1. Read stable traffic from monitor thread
+                total_load = self.current_load_mbps
     
                 # Distribute real load proportionally into our standard traffic bins for UI
                 # Baseline noise usually hits VoIP, heavy hits HTTP/Video
@@ -265,13 +279,23 @@ class NetworkState:
                 # Generate Alerts based on actual state transitions or thresholds
                 alerts = []
                 now_str = time.strftime("%H:%M:%S")
+
+                # State Transition Alerts
+                if state != self.last_state:
+                    if state == "high":
+                        alerts.append({"time": now_str, "msg": f"SYSTEM: High Congestion Detected - QoS Policy Active ({bw_voip}% VoIP Reservation)", "cls": "warn"})
+                    elif state == "med":
+                        alerts.append({"time": now_str, "msg": "SYSTEM: Moderate Load Detected - Adjusting Bandwidth Allocation", "cls": "ok"})
+                    elif state == "low":
+                        alerts.append({"time": now_str, "msg": "SYSTEM: Nominal Traffic Conditions - Policy Reset to Baseline", "cls": "ok"})
+                    self.last_state = state
+
+                # Critical Threshold Alerts (always send if active)
                 if utilization_ratio > 0.85:
-                    alerts.append({"time": now_str, "msg": "Critical link utilization detected > 85%", "cls": "crit"})
-                elif state == "high":
-                    alerts.append({"time": now_str, "msg": f"QoS active: VoIP bandwidth increased to {bw_voip}%", "cls": "warn"})
+                    alerts.append({"time": now_str, "msg": "CRITICAL: Link utilization exceeded 85% safety threshold", "cls": "crit"})
                     
                 if packet_loss > 1.0:
-                     alerts.append({"time": now_str, "msg": f"Packet loss elevated ({packet_loss:.1f}%) detected", "cls": "warn"})
+                     alerts.append({"time": now_str, "msg": f"ALERT: Elevated Packet Loss ({packet_loss:.1f}%) detected", "cls": "warn"})
     
                 # Get real active processes with network connections
                 active_processes = []

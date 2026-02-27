@@ -1801,8 +1801,14 @@
 
       try {
         // 1. Process alerts from backend + user actions (High Priority)
-        const allAlerts = [...(data.alerts || []), ...pendingAlerts];
+        let allAlerts = [...(data.alerts || []), ...pendingAlerts];
         pendingAlerts = []; // Clear queue after processing
+
+        // Filter out unwanted chatter (DPI logs and Nominal status)
+        allAlerts = allAlerts.filter(msg => {
+          const m = msg.msg || "";
+          return !m.includes("DPI Engine") && !m.includes("Nominal traffic");
+        });
 
         if (allAlerts.length > 0) {
           const list = document.getElementById('alert-list');
@@ -1943,7 +1949,13 @@
             div.className = 'bw-item';
             div.style.marginBottom = '16px';
             const hash = proc.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-            const loadPerc = 10 + (hash % 60) * (data.traffic.aggregate / 110.0);
+
+            // Artificial weighting based on application type
+            let weight = 0.5 + (hash % 40) / 20.0;
+            if (proc.toLowerCase().includes('chrome') || proc.toLowerCase().includes('edge') || proc.toLowerCase().includes('cef')) weight *= 1.8;
+            if (proc.toLowerCase().includes('python') || proc.toLowerCase().includes('dcn')) weight *= 0.6;
+
+            const loadPerc = 5 + (weight * 15) + (hash % 10) * (data.traffic.aggregate / 20.0);
             const mbps = (loadPerc * 0.8).toFixed(1);
             div.innerHTML = `
               <div class="bw-label"><span style="color: var(--text);">${proc}</span><span class="bw-val">${mbps} Mbps</span></div>
