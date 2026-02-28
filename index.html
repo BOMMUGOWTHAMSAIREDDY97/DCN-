@@ -2047,10 +2047,22 @@
         tr.style.borderBottom = '1px solid var(--border)';
         tr.style.backgroundColor = 'rgba(0,0,0,0.1)';
 
-        // Detect if the server time matches laptop 23:xx or is still stuck in 17:xx
+        // Base time string safely fallback
         let displayTime = row.time || '—';
 
-
+        if (row.timestamp) {
+          try {
+            // Javascript parses the GMT timestamp and naturally aligns to the user's Local timezone (IST)
+            const date = new Date(row.timestamp);
+            if (!isNaN(date.getTime())) {
+              displayTime = date.getHours().toString().padStart(2, '0') + ':' +
+                date.getMinutes().toString().padStart(2, '0') + ':' +
+                date.getSeconds().toString().padStart(2, '0');
+            }
+          } catch (e) {
+            console.warn("Time parse error:", e);
+          }
+        }
         const stateColor = row.state === 'high' ? 'var(--red)' : (row.state === 'med' ? 'var(--accent)' : 'var(--green)');
 
         tr.innerHTML = `
