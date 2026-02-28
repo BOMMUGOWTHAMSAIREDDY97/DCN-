@@ -420,7 +420,7 @@ def get_dataset():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT 
-                    timestamp,
+                    timestamp::text as timestamp,
                     time_str as time, 
                     voip_kbps as voip, 
                     http_mbps as http, 
