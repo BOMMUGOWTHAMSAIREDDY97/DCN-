@@ -2052,8 +2052,10 @@
 
         if (row.timestamp) {
           try {
-            // Javascript parses the GMT timestamp and naturally aligns to the user's Local timezone (IST)
-            const date = new Date(row.timestamp);
+            // Convert Postgres "2026-02-28 10:00:00+00" to strict ISO format
+            let safeIsoString = String(row.timestamp).replace(' ', 'T');
+            const date = new Date(safeIsoString);
+
             if (!isNaN(date.getTime())) {
               displayTime = date.getHours().toString().padStart(2, '0') + ':' +
                 date.getMinutes().toString().padStart(2, '0') + ':' +
