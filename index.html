@@ -1708,7 +1708,7 @@
     }
 
     // Data stores
-    // Auto-detect backend: use Render on live site, localhost when developing
+    // Auto-detect backend: use localhost when developing, relative URL on Vercel
     const BACKEND_URL = (
       window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1' ||
@@ -1716,7 +1716,7 @@
       window.location.hostname.startsWith('10.') ||
       window.location.hostname.startsWith('172.') ||
       window.location.protocol === 'file:'
-    ) ? 'http://127.0.0.1:5002' : 'https://dcn-2.onrender.com';
+    ) ? 'http://127.0.0.1:5002' : '';
 
     const N = 40;
     let delayData = Array.from({ length: N }, () => 10 + Math.random() * 8);
