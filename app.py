@@ -298,25 +298,24 @@ class NetworkState:
                 if packet_loss > 1.0:
                      alerts.append({"time": now_str, "msg": f"ALERT: Elevated Packet Loss ({packet_loss:.1f}%) detected", "cls": "warn"})
     
-                # Get real active processes with network connections
+                # Get real active processes causing I/O traffic
                 active_processes = []
                 try:
-                    # We look for ESTABLISHED connections to find active apps
-                    connections = psutil.net_connections(kind='inet')
-                    procs = {}
-                    for conn in connections:
-                        if conn.status == 'ESTABLISHED' and conn.pid:
-                            try:
-                                p = psutil.Process(conn.pid)
-                                name = p.name()
-                                if name not in procs:
-                                    procs[name] = 0
-                                procs[name] += 1
-                            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                continue
-                    # Sort by connection count and take top 5
-                    sorted_procs = sorted(procs.items(), key=lambda x: x[1], reverse=True)
-                    active_processes = [name for name, count in sorted_procs[:5]]
+                    procs = []
+                    for p in psutil.process_iter(['name', 'io_counters']):
+                        try:
+                            # We score by IO bytes (read_bytes + write_bytes) if available on the OS
+                            io = p.info.get('io_counters')
+                            if io:
+                                total_io = getattr(io, 'read_bytes', getattr(io, 'read_count', 0)) + \
+                                           getattr(io, 'write_bytes', getattr(io, 'write_count', 0))
+                                procs.append((p.info['name'], total_io))
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            continue
+                    
+                    # Sort active processes by total IO and take top 5
+                    sorted_procs = sorted(procs, key=lambda x: x[1], reverse=True)
+                    active_processes = [name for name, _ in sorted_procs[:5] if name != 'System Idle Process']
                 except Exception as e:
                     print(f"Error fetching processes: {e}")
     
