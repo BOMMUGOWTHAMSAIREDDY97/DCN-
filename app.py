@@ -119,8 +119,9 @@ class NetworkState:
             tput = metrics['performance']['throughput']
             loss = metrics['performance']['packet_loss']
             state = metrics['ml']['state']
-            now = datetime.now()
-            now_str = now.strftime("%H:%M:%S")
+            now = datetime.now(timezone.utc)
+            now_local = datetime.now()
+            now_str = now_local.strftime("%H:%M:%S")
 
             conn = self._get_db_connection()
             if conn:
@@ -430,8 +431,8 @@ def get_dataset():
                     packet_loss_pct as loss, 
                     state 
                 FROM network_logs 
-                ORDER BY timestamp DESC 
-                LIMIT 100
+                ORDER BY id DESC 
+                LIMIT 1000
             """)
             rows = [dict(row) for row in cur.fetchall()]
         return jsonify(rows)
