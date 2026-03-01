@@ -4,9 +4,8 @@ import time
 import math
 import requests as req_lib
 import os
-import psycopg2
+import sqlite3
 import psutil
-from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 import joblib
 import pandas as pd
@@ -37,8 +36,8 @@ class NetworkState:
         self.capacity_mbps = 100.0  # Max assumed local capacity for utilization calcs
         self.current_load_mbps = 0.05
         
-        # Initialize Supabase DB connection
-        self.db_url = os.environ.get("SUPABASE_URL")
+        # Initialize SQLite DB connection
+        self.db_path = "network_logs.db"
         self._init_db()
         
         # Load Decision Tree Model
@@ -106,7 +105,7 @@ class NetworkState:
                 time.sleep(5) # Avoid rapid-fire errors
 
     def _log_to_db(self):
-        """Calculates metrics and inserts into Supabase."""
+        """Calculates metrics and inserts into SQLite."""
         try:
             metrics = self.get_current_metrics(internal=True)
             if not metrics:
@@ -119,21 +118,21 @@ class NetworkState:
             tput = metrics['performance']['throughput']
             loss = metrics['performance']['packet_loss']
             state = metrics['ml']['state']
-            now = datetime.now(timezone.utc)
+            now = datetime.now(timezone.utc).isoformat()
             now_local = datetime.now()
             now_str = now_local.strftime("%H:%M:%S")
 
             conn = self._get_db_connection()
             if conn:
                 try:
-                    with conn.cursor() as cur:
-                        cur.execute("""
-                            INSERT INTO network_logs 
-                            (timestamp, time_str, voip_kbps, http_mbps, ftp_mbps, delay_ms, throughput_gbps, packet_loss_pct, state)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """, (
-                            now, now_str, voip, http, ftp, delay, tput, loss, state
-                        ))
+                    cur = conn.cursor()
+                    cur.execute("""
+                        INSERT INTO network_logs 
+                        (timestamp, time_str, voip_kbps, http_mbps, ftp_mbps, delay_ms, throughput_gbps, packet_loss_pct, state)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        now, now_str, voip, http, ftp, delay, tput, loss, state
+                    ))
                     conn.commit()
                 except Exception as e:
                     print(f"Error inserting into DB: {e}")
@@ -143,11 +142,10 @@ class NetworkState:
             print(f"Error in _log_to_db: {e}")
 
     def _get_db_connection(self):
-        if not self.db_url:
-            return None
         try:
-            # Added connection timeout to prevent perpetual hangs
-            return psycopg2.connect(self.db_url, connect_timeout=10)
+            conn = sqlite3.connect(self.db_path, timeout=10)
+            conn.row_factory = sqlite3.Row
+            return conn
         except Exception as e:
             print(f"Error connecting to database: {e}")
             return None
@@ -157,21 +155,21 @@ class NetworkState:
         if not conn: return
         
         try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS network_logs (
-                        id SERIAL PRIMARY KEY,
-                        timestamp TIMESTAMPTZ DEFAULT NOW(),
-                        time_str VARCHAR(10),
-                        voip_kbps INTEGER,
-                        http_mbps FLOAT,
-                        ftp_mbps FLOAT,
-                        delay_ms FLOAT,
-                        throughput_gbps FLOAT,
-                        packet_loss_pct FLOAT,
-                        state VARCHAR(10)
-                    );
-                """)
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS network_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+                    time_str VARCHAR(10),
+                    voip_kbps INTEGER,
+                    http_mbps FLOAT,
+                    ftp_mbps FLOAT,
+                    delay_ms FLOAT,
+                    throughput_gbps FLOAT,
+                    packet_loss_pct FLOAT,
+                    state VARCHAR(10)
+                );
+            """)
             conn.commit()
         except Exception as e:
             print(f"Error initializing database table: {e}")
@@ -411,29 +409,29 @@ def update_config():
 
 @app.route('/api/dataset', methods=['GET'])
 def get_dataset():
-    # Fetch from Supabase
+    # Fetch from SQLite
     conn = state_manager._get_db_connection()
     if not conn:
         return jsonify({"error": "No database connection"}), 500
         
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                SELECT 
-                    timestamp::text as timestamp,
-                    time_str as time, 
-                    voip_kbps as voip, 
-                    http_mbps as http, 
-                    ftp_mbps as ftp,
-                    delay_ms as delay, 
-                    throughput_gbps as throughput, 
-                    packet_loss_pct as loss, 
-                    state 
-                FROM network_logs 
-                ORDER BY id DESC 
-                LIMIT 1000
-            """)
-            rows = [dict(row) for row in cur.fetchall()]
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT 
+                timestamp,
+                time_str as time, 
+                voip_kbps as voip, 
+                http_mbps as http, 
+                ftp_mbps as ftp,
+                delay_ms as delay, 
+                throughput_gbps as throughput, 
+                packet_loss_pct as loss, 
+                state 
+            FROM network_logs 
+            ORDER BY id DESC 
+            LIMIT 1000
+        """)
+        rows = [dict(row) for row in cur.fetchall()]
         return jsonify(rows)
     except Exception as e:
         print(f"Error fetching logs: {e}")
