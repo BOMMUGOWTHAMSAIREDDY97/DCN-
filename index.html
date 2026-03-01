@@ -1709,14 +1709,9 @@
 
     // Data stores
     // Auto-detect backend: use localhost when developing, relative URL on Vercel
-    const BACKEND_URL = (
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      window.location.hostname.startsWith('192.168.') ||
-      window.location.hostname.startsWith('10.') ||
-      window.location.hostname.startsWith('172.') ||
-      window.location.protocol === 'file:'
-    ) ? 'http://127.0.0.1:5002' : '';
+    const BACKEND_URL = (window.location.protocol === 'file:' || (window.location.port !== '5002' && window.location.port !== '')) 
+      ? 'http://127.0.0.1:5002' 
+      : '';
 
     const N = 40;
     let delayData = Array.from({ length: N }, () => 10 + Math.random() * 8);
@@ -2029,7 +2024,7 @@
         data = await res.json();
       } catch (e) {
         console.error('fetchDataset error:', e);
-        if (countEl) countEl.textContent = '⚠ Fetch failed';
+        if (countEl) countEl.textContent = '⚠ ' + (e.message.includes('fetch') ? 'Connect failed (is server running?)' : e.message);
         return;
       }
 
