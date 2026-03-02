@@ -28,21 +28,21 @@ class NetworkState:
             "ftp_prio": "std"
         }
         self.last_log_time = 0
-        self.log_interval = 10 # Log every 10 seconds for better dynamics
-        self.active_interface = "Scanning..."
+        self.log_interval = 10 # Log every 10 seconds
         self.last_state = "low"
         self.on_vercel = os.environ.get('VERCEL', '') == '1'
-
+        self.active_interface = "Vercel Cloud" if self.on_vercel else "Scanning..."
+        
         # Real Traffic Baseline
         self.capacity_mbps = 100.0
-        self.current_load_mbps = 0.05
+        self.current_load_mbps = 0.5 if self.on_vercel else 0.01 
         if not self.on_vercel:
             try:
-                self.last_net_io = psutil.net_io_counters()
+                self.last_net_io = psutil.net_io_counters(pernic=True)
             except Exception:
-                self.last_net_io = None
+                self.last_net_io = {}
         else:
-            self.last_net_io = None
+            self.last_net_io = {}
         
         # Use /tmp for DB on Vercel (read-only FS); fall back to project dir locally
         import tempfile
