@@ -1441,39 +1441,125 @@
     </div>
   </main>
   <main id="view-dataset" class="view-section">
-    <div class="panel" style="height: calc(100vh - 180px); overflow: hidden; display: flex; flex-direction: column;">
-      <div class="panel-title" style="display: flex; align-items: center; justify-content: space-between;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <div class="t-icon" style="display:inline-block; border: none;">📊</div> Network Metric Dataset (Excel View) |
-          <span style="color:var(--yellow)">LOCAL TIME</span>
+    <div class="panel"
+      style="height: calc(100vh - 180px); overflow: hidden; display: flex; flex-direction: column; gap: 0;">
+
+      <!-- Header Row -->
+      <div
+        style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
+        <div class="panel-title" style="margin-bottom: 0;">
+          📊 Network Metric Dataset &nbsp;|&nbsp;
+          <span style="color:var(--yellow); font-size: 0.7rem;">LOCAL TIME</span>
         </div>
-        <div style="font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; color: var(--dim);">
-          <span id="dataset-row-count">Loading...</span> | <span id="dataset-last-updated">--:--:--</span>
+        <div style="font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; color: var(--dim);">
+          <span id="dataset-row-count" style="color:var(--accent);">Loading...</span>
+          &nbsp;|&nbsp; Updated: <span id="dataset-last-updated">--:--:--</span>
         </div>
       </div>
-      <div
-        style="flex: 1; overflow-y: auto; margin-top: 15px; border: 1px solid var(--border); background: rgba(0,0,0,0.3);">
+
+      <!-- Toolbar -->
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+        <input id="dataset-search" type="text" placeholder="🔍 Search (state, time)…" oninput="filterDatasetRows()"
+          style="background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: var(--text);
+                 padding: 6px 12px; font-family: 'Share Tech Mono', monospace; font-size: 0.78rem;
+                 outline: none; width: 220px; flex-shrink: 0; transition: border-color 0.2s;"
+          onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+
+        <select id="dataset-state-filter" onchange="filterDatasetRows()"
+          style="background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: var(--text);
+                 padding: 6px 10px; font-family: 'Rajdhani', sans-serif; font-size: 0.85rem; outline: none; cursor:pointer;">
+          <option value="">ALL STATES</option>
+          <option value="low">LOW</option>
+          <option value="med">MED</option>
+          <option value="high">HIGH</option>
+        </select>
+
+        <button onclick="fetchDataset()" style="padding: 6px 14px; border: 1px solid var(--accent); background: rgba(0,212,255,0.08);
+                 color: var(--accent); font-family: 'Rajdhani', sans-serif; font-weight: 600;
+                 font-size: 0.8rem; cursor: pointer; letter-spacing: 1px; transition: all 0.2s;"
+          onmouseover="this.style.background='rgba(0,212,255,0.18)'"
+          onmouseout="this.style.background='rgba(0,212,255,0.08)'">↺ REFRESH</button>
+
+        <button onclick="seedDataset()" id="seed-btn" style="padding: 6px 14px; border: 1px solid var(--green); background: rgba(0,255,136,0.08);
+                 color: var(--green); font-family: 'Rajdhani', sans-serif; font-weight: 600;
+                 font-size: 0.8rem; cursor: pointer; letter-spacing: 1px; transition: all 0.2s;"
+          onmouseover="this.style.background='rgba(0,255,136,0.18)'"
+          onmouseout="this.style.background='rgba(0,255,136,0.08)'">⬡ SEED 24H DATA</button>
+
+        <button onclick="exportDatasetCSV()" style="padding: 6px 14px; border: 1px solid var(--yellow); background: rgba(255,183,0,0.08);
+                 color: var(--yellow); font-family: 'Rajdhani', sans-serif; font-weight: 600;
+                 font-size: 0.8rem; cursor: pointer; letter-spacing: 1px; transition: all 0.2s;"
+          onmouseover="this.style.background='rgba(255,183,0,0.18)'"
+          onmouseout="this.style.background='rgba(255,183,0,0.08)'">⬇ EXPORT CSV</button>
+
+        <button onclick="clearDataset()" style="padding: 6px 14px; border: 1px solid var(--red); background: rgba(255,51,85,0.08);
+                 color: var(--red); font-family: 'Rajdhani', sans-serif; font-weight: 600;
+                 font-size: 0.8rem; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; margin-left: auto;"
+          onmouseover="this.style.background='rgba(255,51,85,0.18)'"
+          onmouseout="this.style.background='rgba(255,51,85,0.08)'">✕ CLEAR DB</button>
+      </div>
+
+      <!-- Table wrapper -->
+      <div id="dataset-table-wrap"
+        style="flex: 1; overflow-y: auto; border: 1px solid var(--border); background: rgba(0,0,0,0.25); position: relative;">
+        <!-- Empty / Error state -->
+        <div id="dataset-empty-state"
+          style="display:none; flex-direction:column; align-items:center; justify-content:center; height:100%; min-height:200px; gap:18px; padding: 60px 20px; text-align:center;">
+          <div style="font-size: 2.5rem;">📭</div>
+          <div id="dataset-empty-msg"
+            style="font-family:'Share Tech Mono',monospace; font-size:0.9rem; color:var(--dim); line-height:1.8;"></div>
+          <button onclick="seedDataset()" style="padding: 10px 28px; border: 1px solid var(--green); background: rgba(0,255,136,0.1);
+                   color: var(--green); font-family: 'Rajdhani', sans-serif; font-weight: 700;
+                   font-size: 0.95rem; cursor: pointer; letter-spacing: 2px; transition: all 0.2s;"
+            onmouseover="this.style.background='rgba(0,255,136,0.22)'"
+            onmouseout="this.style.background='rgba(0,255,136,0.1)'">⬡ SEED SAMPLE DATA NOW</button>
+        </div>
+
         <table id="dataset-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
-          <thead style="position: sticky; top: 0; background: var(--bg); z-index: 10;">
+          <thead style="position: sticky; top: 0; background: #030d16; z-index: 10;">
             <tr>
-              <th style="padding: 12px; border-bottom: 2px solid var(--accent); color: var(--accent);">TIMESTAMP</th>
-              <th style="padding: 12px; border-bottom: 2px solid var(--accent); color: var(--accent);">PRIORITY FLOW (K)
-              </th>
-              <th style="padding: 12px; border-bottom: 2px solid var(--accent); color: var(--accent);">STANDARD FLOW (M)
-              </th>
-              <th style="padding: 12px; border-bottom: 2px solid var(--accent); color: var(--accent);">BULK FLOW (M)
-              </th>
-              <th style="padding: 12px; border-bottom: 2px solid var(--accent); color: var(--accent);">DELAY (MS)</th>
-              <th style="padding: 12px; border-bottom: 2px solid var(--accent); color: var(--accent);">THROUGHPUT</th>
-              <th style="padding: 12px; border-bottom: 2px solid var(--accent); color: var(--accent);">LOSS (%)</th>
-              <th style="padding: 12px; border-bottom: 2px solid var(--accent); color: var(--accent);">STATE</th>
+              <th onclick="sortDataset('timestamp')"
+                style="padding: 11px 14px; border-bottom: 2px solid var(--accent); color: var(--accent); font-size:0.7rem; letter-spacing:1.5px; white-space:nowrap; cursor:pointer; user-select:none;">
+                # TIMESTAMP ↕</th>
+              <th onclick="sortDataset('voip')"
+                style="padding: 11px 14px; border-bottom: 2px solid var(--accent); color: var(--accent); font-size:0.7rem; letter-spacing:1.5px; cursor:pointer; user-select:none;">
+                VOIP (Kbps) ↕</th>
+              <th onclick="sortDataset('http')"
+                style="padding: 11px 14px; border-bottom: 2px solid var(--accent); color: var(--accent); font-size:0.7rem; letter-spacing:1.5px; cursor:pointer; user-select:none;">
+                HTTP (Mbps) ↕</th>
+              <th onclick="sortDataset('ftp')"
+                style="padding: 11px 14px; border-bottom: 2px solid var(--accent); color: var(--accent); font-size:0.7rem; letter-spacing:1.5px; cursor:pointer; user-select:none;">
+                FTP (Mbps) ↕</th>
+              <th onclick="sortDataset('delay')"
+                style="padding: 11px 14px; border-bottom: 2px solid var(--accent); color: var(--accent); font-size:0.7rem; letter-spacing:1.5px; cursor:pointer; user-select:none;">
+                DELAY (ms) ↕</th>
+              <th onclick="sortDataset('throughput')"
+                style="padding: 11px 14px; border-bottom: 2px solid var(--accent); color: var(--accent); font-size:0.7rem; letter-spacing:1.5px; cursor:pointer; user-select:none;">
+                THROUGHPUT ↕</th>
+              <th onclick="sortDataset('loss')"
+                style="padding: 11px 14px; border-bottom: 2px solid var(--accent); color: var(--accent); font-size:0.7rem; letter-spacing:1.5px; cursor:pointer; user-select:none;">
+                LOSS (%) ↕</th>
+              <th onclick="sortDataset('state')"
+                style="padding: 11px 14px; border-bottom: 2px solid var(--accent); color: var(--accent); font-size:0.7rem; letter-spacing:1.5px; cursor:pointer; user-select:none;">
+                STATE ↕</th>
             </tr>
           </thead>
           <tbody id="dataset-body">
-            <!-- Rows added via JS -->
           </tbody>
         </table>
       </div>
+
+      <!-- Footer stats bar -->
+      <div
+        style="display:flex; gap:24px; margin-top:10px; font-family:'Share Tech Mono',monospace; font-size:0.72rem; color:var(--dim); flex-wrap:wrap; align-items:center;">
+        <span>LOW: <span id="ds-stat-low" style="color:var(--green)">—</span></span>
+        <span>MED: <span id="ds-stat-med" style="color:var(--accent)">—</span></span>
+        <span>HIGH: <span id="ds-stat-high" style="color:var(--red)">—</span></span>
+        <span>AVG DELAY: <span id="ds-stat-delay" style="color:var(--yellow)">— ms</span></span>
+        <span>AVG LOSS: <span id="ds-stat-loss" style="color:var(--yellow)">— %</span></span>
+        <span style="margin-left:auto;">Auto-refreshes every 4s · DB logs every 60s at minute boundary</span>
+      </div>
+    </div>
   </main>
 
   <main id="view-analytics" class="view-section">
@@ -1709,8 +1795,8 @@
 
     // Data stores
     // Auto-detect backend: use localhost when developing, relative URL on Vercel
-    const BACKEND_URL = (window.location.protocol === 'file:' || (window.location.port !== '5002' && window.location.port !== '')) 
-      ? 'http://127.0.0.1:5002' 
+    const BACKEND_URL = (window.location.protocol === 'file:' || (window.location.port !== '5002' && window.location.port !== ''))
+      ? 'http://127.0.0.1:5002'
       : '';
 
     const N = 40;
@@ -2012,72 +2098,188 @@
       }
     }
 
+    // ─── Dataset Module ──────────────────────────────────────────────────────
+    let _dsAllRows = [];        // full dataset from server
+    let _dsSortKey = 'timestamp';
+    let _dsSortAsc = false;
+
     async function fetchDataset() {
       const countEl = document.getElementById('dataset-row-count');
       const lastUpdEl = document.getElementById('dataset-last-updated');
+      const emptyState = document.getElementById('dataset-empty-state');
+      const emptyMsg = document.getElementById('dataset-empty-msg');
+      const table = document.getElementById('dataset-table');
       if (countEl) countEl.textContent = 'Fetching...';
 
       let data;
       try {
         const res = await fetch(`${BACKEND_URL}/api/dataset`);
-        if (!res.ok) throw new Error("Dataset fetch failed: " + res.status);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         data = await res.json();
       } catch (e) {
-        console.error('fetchDataset error:', e);
-        if (countEl) countEl.textContent = '⚠ ' + (e.message.includes('fetch') ? 'Connect failed (is server running?)' : e.message);
+        const isConn = e.message.toLowerCase().includes('fetch') || e.message.toLowerCase().includes('failed');
+        const msg = isConn
+          ? '⚠ Connect failed — is the Flask server running?\n\nStart it with:\n  python app.py\n\nOr seed demo data once the server is up.'
+          : '⚠ ' + e.message;
+        if (countEl) { countEl.textContent = '⚠ Server offline'; countEl.style.color = 'var(--red)'; }
+        if (emptyMsg) emptyMsg.innerText = msg;
+        if (emptyState) emptyState.style.display = 'flex';
+        if (table) table.style.display = 'none';
         return;
       }
 
       if (!Array.isArray(data) || data.length === 0) {
-        if (countEl) countEl.textContent = 'No data in DB yet';
+        if (countEl) { countEl.textContent = '0 rows'; countEl.style.color = 'var(--dim)'; }
+        if (emptyMsg) emptyMsg.innerText = 'No records in DB yet.\n\nThe logger writes every 60 seconds at minute boundaries.\nClick "SEED 24H DATA" to populate immediately for demo.';
+        if (emptyState) emptyState.style.display = 'flex';
+        if (table) table.style.display = 'none';
         return;
       }
 
+      _dsAllRows = data;
+      if (emptyState) emptyState.style.display = 'none';
+      if (table) table.style.display = 'table';
+      if (countEl) { countEl.textContent = data.length + ' rows'; countEl.style.color = 'var(--accent)'; }
+      if (lastUpdEl) lastUpdEl.textContent = new Date().toLocaleTimeString([], { hour12: false });
+      renderDatasetTable();
+    }
+
+    function _parseTime(row) {
+      if (row.timestamp) {
+        try {
+          const d = new Date(String(row.timestamp).replace(' ', 'T'));
+          if (!isNaN(d.getTime())) return d.toLocaleTimeString([], { hour12: false });
+        } catch (e) { }
+      }
+      return row.time || '—';
+    }
+
+    function renderDatasetTable() {
       const body = document.getElementById('dataset-body');
       if (!body) return;
+      const search = (document.getElementById('dataset-search') ? document.getElementById('dataset-search').value : '').toLowerCase();
+      const stateF = document.getElementById('dataset-state-filter') ? document.getElementById('dataset-state-filter').value : '';
+
+      let rows = _dsAllRows.filter(function (r) {
+        if (stateF && r.state !== stateF) return false;
+        if (search) {
+          const text = ((r.state || '') + ' ' + (r.time || '') + ' ' + (r.timestamp || '')).toLowerCase();
+          if (text.indexOf(search) === -1) return false;
+        }
+        return true;
+      });
+
+      rows.sort(function (a, b) {
+        let va = a[_dsSortKey], vb = b[_dsSortKey];
+        if (_dsSortKey === 'timestamp') {
+          va = new Date(String(a.timestamp || '').replace(' ', 'T')).getTime() || 0;
+          vb = new Date(String(b.timestamp || '').replace(' ', 'T')).getTime() || 0;
+        } else if (typeof va === 'string') {
+          va = va.toLowerCase(); vb = (vb || '').toLowerCase();
+        } else {
+          va = parseFloat(va) || 0; vb = parseFloat(vb) || 0;
+        }
+        return _dsSortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+      });
 
       body.innerHTML = '';
-      data.forEach(row => {
+      rows.forEach(function (row, idx) {
         const tr = document.createElement('tr');
-        tr.style.borderBottom = '1px solid var(--border)';
-        tr.style.backgroundColor = 'rgba(0,0,0,0.1)';
-
-        // Base time string safely fallback
-        let displayTime = row.time || '—';
-
-        if (row.timestamp) {
-          try {
-            // Convert Postgres "2026-02-28 10:00:00+00" to strict ISO format
-            let safeIsoString = String(row.timestamp).replace(' ', 'T');
-            const date = new Date(safeIsoString);
-
-            if (!isNaN(date.getTime())) {
-              displayTime = date.getHours().toString().padStart(2, '0') + ':' +
-                date.getMinutes().toString().padStart(2, '0') + ':' +
-                date.getSeconds().toString().padStart(2, '0');
-            }
-          } catch (e) {
-            console.warn("Time parse error:", e);
-          }
-        }
-        const stateColor = row.state === 'high' ? 'var(--red)' : (row.state === 'med' ? 'var(--accent)' : 'var(--green)');
-
-        tr.innerHTML = `
-          <td style="padding: 8px 10px; font-family: 'Share Tech Mono'; color: var(--dim);">${displayTime}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.voip !== undefined ? row.voip : '—'}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.http !== undefined ? row.http : '—'}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.ftp !== undefined ? row.ftp : '—'}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.delay !== undefined ? row.delay : '—'}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.throughput !== undefined ? row.throughput : '—'}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border);">${row.loss !== undefined ? row.loss : '—'}</td>
-          <td style="padding: 8px 10px; border-left: 1px solid var(--border); color: ${stateColor}; font-weight: bold;">${row.state ? row.state.toUpperCase() : '—'}</td>
-        `;
+        const isEven = idx % 2 === 0;
+        tr.style.cssText = 'border-bottom: 1px solid rgba(10,64,96,0.4); background: ' + (isEven ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.04)') + '; transition: background 0.15s;';
+        tr.onmouseover = function () { tr.style.background = 'rgba(0,212,255,0.06)'; };
+        tr.onmouseout = function () { tr.style.background = isEven ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.04)'; };
+        const displayTime = _parseTime(row);
+        const sc = row.state === 'high' ? 'var(--red)' : (row.state === 'med' ? 'var(--yellow)' : 'var(--green)');
+        const stateBg = row.state === 'high' ? 'rgba(255,51,85,0.15)' : (row.state === 'med' ? 'rgba(255,183,0,0.12)' : 'rgba(0,255,136,0.12)');
+        const delayColor = (parseFloat(row.delay) > 50) ? 'var(--yellow)' : 'var(--text)';
+        const lossColor = (parseFloat(row.loss) > 0.5) ? 'var(--red)' : 'var(--text)';
+        tr.innerHTML =
+          '<td style="padding:7px 14px;font-family:\'Share Tech Mono\',monospace;font-size:0.72rem;color:var(--dim);white-space:nowrap;"><span style="color:rgba(255,255,255,0.18);margin-right:8px;">' + (idx + 1) + '</span>' + displayTime + '</td>' +
+          '<td style="padding:7px 14px;border-left:1px solid rgba(10,64,96,0.4);font-family:\'Share Tech Mono\',monospace;">' + (row.voip !== undefined ? row.voip : '—') + '</td>' +
+          '<td style="padding:7px 14px;border-left:1px solid rgba(10,64,96,0.4);font-family:\'Share Tech Mono\',monospace;">' + (row.http !== undefined ? row.http : '—') + '</td>' +
+          '<td style="padding:7px 14px;border-left:1px solid rgba(10,64,96,0.4);font-family:\'Share Tech Mono\',monospace;">' + (row.ftp !== undefined ? row.ftp : '—') + '</td>' +
+          '<td style="padding:7px 14px;border-left:1px solid rgba(10,64,96,0.4);font-family:\'Share Tech Mono\',monospace;color:' + delayColor + ';">' + (row.delay !== undefined ? row.delay : '—') + '</td>' +
+          '<td style="padding:7px 14px;border-left:1px solid rgba(10,64,96,0.4);font-family:\'Share Tech Mono\',monospace;">' + (row.throughput !== undefined ? row.throughput : '—') + '</td>' +
+          '<td style="padding:7px 14px;border-left:1px solid rgba(10,64,96,0.4);font-family:\'Share Tech Mono\',monospace;color:' + lossColor + ';">' + (row.loss !== undefined ? row.loss : '—') + '</td>' +
+          '<td style="padding:7px 14px;border-left:1px solid rgba(10,64,96,0.4);"><span style="display:inline-block;padding:3px 10px;font-family:\'Rajdhani\',sans-serif;font-weight:700;font-size:0.8rem;letter-spacing:1px;color:' + sc + ';background:' + stateBg + ';border:1px solid ' + sc + ';border-radius:2px;">' + (row.state ? row.state.toUpperCase() : '—') + '</span></td>';
         body.appendChild(tr);
       });
 
-      if (countEl) countEl.textContent = `${data.length} rows`;
-      if (lastUpdEl) lastUpdEl.textContent = new Date().toLocaleTimeString([], { hour12: false });
+      // Stats footer
+      const el_low = document.getElementById('ds-stat-low'); if (el_low) el_low.textContent = _dsAllRows.filter(function (r) { return r.state === 'low'; }).length;
+      const el_med = document.getElementById('ds-stat-med'); if (el_med) el_med.textContent = _dsAllRows.filter(function (r) { return r.state === 'med'; }).length;
+      const el_high = document.getElementById('ds-stat-high'); if (el_high) el_high.textContent = _dsAllRows.filter(function (r) { return r.state === 'high'; }).length;
+      const avgDelay = _dsAllRows.reduce(function (s, r) { return s + (parseFloat(r.delay) || 0); }, 0) / (_dsAllRows.length || 1);
+      const avgLoss = _dsAllRows.reduce(function (s, r) { return s + (parseFloat(r.loss) || 0); }, 0) / (_dsAllRows.length || 1);
+      const el_delay = document.getElementById('ds-stat-delay'); if (el_delay) el_delay.textContent = avgDelay.toFixed(1) + ' ms';
+      const el_loss = document.getElementById('ds-stat-loss'); if (el_loss) el_loss.textContent = avgLoss.toFixed(3) + ' %';
+
+      const countEl2 = document.getElementById('dataset-row-count');
+      if (countEl2) countEl2.textContent = rows.length === _dsAllRows.length ? (_dsAllRows.length + ' rows') : (rows.length + ' / ' + _dsAllRows.length + ' rows');
     }
+
+    function sortDataset(key) {
+      if (_dsSortKey === key) { _dsSortAsc = !_dsSortAsc; }
+      else { _dsSortKey = key; _dsSortAsc = false; }
+      renderDatasetTable();
+    }
+
+    function filterDatasetRows() {
+      renderDatasetTable();
+    }
+
+    function exportDatasetCSV() {
+      if (!_dsAllRows.length) { alert('No data to export'); return; }
+      var headers = ['timestamp', 'time', 'voip', 'http', 'ftp', 'delay', 'throughput', 'loss', 'state'];
+      var csv = [headers.join(',')].concat(_dsAllRows.map(function (r) {
+        return headers.map(function (h) { return JSON.stringify(r[h] !== undefined ? r[h] : ''); }).join(',');
+      })).join('\r\n');
+      var blob = new Blob([csv], { type: 'text/csv' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'network_metrics_' + new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-') + '.csv';
+      a.click();
+    }
+
+    async function seedDataset() {
+      var btn = document.getElementById('seed-btn');
+      if (btn) { btn.textContent = '⬡ SEEDING...'; btn.disabled = true; }
+      try {
+        var res = await fetch(BACKEND_URL + '/api/seed', { method: 'POST' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var json = await res.json();
+        alert('Seeded ' + json.inserted + ' rows of 24h sample data into DB.');
+        fetchDataset();
+      } catch (e) {
+        alert('Seed failed: ' + e.message + '\n\nMake sure the Flask server is running (python app.py)');
+      } finally {
+        if (btn) { btn.textContent = '⬡ SEED 24H DATA'; btn.disabled = false; }
+      }
+    }
+
+    async function clearDataset() {
+      if (!confirm('Delete ALL rows from the network_logs database?\n\nThis cannot be undone.')) return;
+      try {
+        var res = await fetch(BACKEND_URL + '/api/dataset/clear', { method: 'POST' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var json = await res.json();
+        alert('Deleted ' + json.deleted + ' rows from DB.');
+        _dsAllRows = [];
+        var body = document.getElementById('dataset-body'); if (body) body.innerHTML = '';
+        var emptyState2 = document.getElementById('dataset-empty-state');
+        var emptyMsg2 = document.getElementById('dataset-empty-msg');
+        var table2 = document.getElementById('dataset-table');
+        if (emptyMsg2) emptyMsg2.innerText = 'Database cleared.\n\nClick "SEED 24H DATA" to repopulate.';
+        if (emptyState2) emptyState2.style.display = 'flex';
+        if (table2) table2.style.display = 'none';
+        var countEl3 = document.getElementById('dataset-row-count');
+        if (countEl3) { countEl3.textContent = '0 rows'; countEl3.style.color = 'var(--dim)'; }
+      } catch (e) {
+        alert('Clear failed: ' + e.message);
+      }
+    }
+
 
     // Init polling
     window.addEventListener('load', () => {

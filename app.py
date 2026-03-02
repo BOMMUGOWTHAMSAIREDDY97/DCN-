@@ -439,6 +439,77 @@ def get_dataset():
     finally:
         conn.close()
 
+@app.route('/api/seed', methods=['POST'])
+def seed_dataset():
+    """Inject 24 hours of realistic sample rows (every minute) for demo purposes."""
+    import random, math
+    conn = state_manager._get_db_connection()
+    if not conn:
+        return jsonify({"error": "No DB connection"}), 500
+    try:
+        cur = conn.cursor()
+        rows = []
+        base_time = datetime.now(timezone.utc)
+        # Generate 144 rows: every 10 minutes over 24 hours (going backwards)
+        for i in range(144, 0, -1):
+            t = base_time - __import__('datetime').timedelta(minutes=i * 10)
+            local_t = t.astimezone()  # convert to local
+            time_str = local_t.strftime("%H:%M:%S")
+            # Simulate periodic load pattern with sine wave
+            phase = (i / 144) * 4 * math.pi
+            load = 0.5 + 0.35 * math.sin(phase) + random.uniform(-0.05, 0.05)
+            load = max(0.05, min(0.95, load))
+
+            voip = int(max(20, load * 1000 * 0.15))
+            http = round(max(0.1, load * 8), 1)
+            ftp = round(max(0.0, load * 2), 1)
+
+            if load < 0.35:
+                state = "low"
+                delay = round(5.0 / (1.0 - load) * random.uniform(0.95, 1.05), 1)
+                loss = round(random.uniform(0.01, 0.05), 2)
+            elif load < 0.70:
+                state = "med"
+                delay = round(5.0 / (1.0 - load) * random.uniform(0.88, 1.10), 1)
+                loss = round(random.uniform(0.05, 0.3), 2)
+            else:
+                state = "high"
+                delay = round(5.0 / (1.0 - load) * random.uniform(0.80, 1.15), 1)
+                loss = round(0.5 + (load - 0.70) * 5.0 + random.uniform(-0.1, 0.2), 2)
+
+            tput = round(load * 100 * (1.0 - loss / 100.0), 2)
+            rows.append((t.isoformat(), time_str, voip, http, ftp, delay, tput, loss, state))
+
+        cur.executemany("""
+            INSERT INTO network_logs
+            (timestamp, time_str, voip_kbps, http_mbps, ftp_mbps, delay_ms, throughput_gbps, packet_loss_pct, state)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, rows)
+        conn.commit()
+        return jsonify({"status": "ok", "inserted": len(rows)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/dataset/clear', methods=['POST'])
+def clear_dataset():
+    """Wipe all rows from network_logs (for dev/demo reset)."""
+    conn = state_manager._get_db_connection()
+    if not conn:
+        return jsonify({"error": "No DB connection"}), 500
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM network_logs")
+        conn.commit()
+        return jsonify({"status": "ok", "deleted": cur.rowcount})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))
     app.run(debug=False, host='0.0.0.0', port=port)
