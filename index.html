@@ -1794,13 +1794,21 @@
     }
 
     // Data stores
-    // Auto-detect backend:
-    // - file:// protocol → always local dev
-    // - port 5002 → local Flask dev server
-    // - any other port (e.g. 3000, vite, etc.) → local dev
-    // - empty port (port 80/443, i.e. Vercel/production) → use relative URLs (Flask runs on same origin)
-    const isLocalDev = window.location.protocol === 'file:' || window.location.port !== '';
-    const BACKEND_URL = isLocalDev ? 'http://127.0.0.1:5002' : '';
+    // Auto-detect backend URL based on where the page is being served from:
+    //   file://            → local dev, hit local Flask
+    //   port != ''         → local dev (e.g. :5002, :3000), hit local Flask
+    //   *.github.io        → GitHub Pages (static only), proxy to Vercel backend
+    //   *.vercel.app / CDN → production, use relative URL (Flask on same origin)
+    const _host = window.location.hostname;
+    const _port = window.location.port;
+    let BACKEND_URL;
+    if (window.location.protocol === 'file:' || _port !== '') {
+      BACKEND_URL = 'http://127.0.0.1:5002';          // local Flask dev server
+    } else if (_host.includes('github.io')) {
+      BACKEND_URL = 'https://cdn-network.vercel.app'; // GitHub Pages → Vercel backend
+    } else {
+      BACKEND_URL = '';                               // Vercel / same-origin production
+    }
 
     const N = 40;
     let delayData = Array.from({ length: N }, () => 10 + Math.random() * 8);
