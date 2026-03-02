@@ -1449,7 +1449,7 @@
         style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
         <div class="panel-title" style="margin-bottom: 0;">
           📊 Network Metric Dataset &nbsp;|&nbsp;
-          <span style="color:var(--yellow); font-size: 0.7rem;">LOCAL TIME</span>
+          <span style="color:var(--yellow); font-size: 0.7rem;" id="ds-local-time-clock">LOCAL TIME: --:--:--</span>
         </div>
         <div style="font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; color: var(--dim);">
           <span id="dataset-row-count" style="color:var(--accent);">Loading...</span>
@@ -1459,11 +1459,6 @@
 
       <!-- Toolbar -->
       <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
-        <input id="dataset-search" type="text" placeholder="🔍 Search (state, time)…" oninput="filterDatasetRows()"
-          style="background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: var(--text);
-                 padding: 6px 12px; font-family: 'Share Tech Mono', monospace; font-size: 0.78rem;
-                 outline: none; width: 220px; flex-shrink: 0; transition: border-color 0.2s;"
-          onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
 
         <select id="dataset-state-filter" onchange="filterDatasetRows()"
           style="background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: var(--text);
@@ -1557,7 +1552,7 @@
         <span>HIGH: <span id="ds-stat-high" style="color:var(--red)">—</span></span>
         <span>AVG DELAY: <span id="ds-stat-delay" style="color:var(--yellow)">— ms</span></span>
         <span>AVG LOSS: <span id="ds-stat-loss" style="color:var(--yellow)">— %</span></span>
-        <span style="margin-left:auto;">Auto-refreshes every 4s · DB logs every 60s at minute boundary</span>
+        <span style="margin-left:auto;">Auto-refreshes every 4s · DB logs every 10s</span>
       </div>
     </div>
   </main>
@@ -1752,6 +1747,8 @@
       const t = now.toTimeString().slice(0, 8);
       document.getElementById('clock').textContent = t;
       document.getElementById('footer-time').textContent = 'SYS TIME: ' + t;
+      const dsClock = document.getElementById('ds-local-time-clock');
+      if (dsClock) dsClock.textContent = 'LOCAL TIME: ' + t;
     }
     setInterval(updateClock, 1000);
     updateClock();
@@ -2168,15 +2165,10 @@
     function renderDatasetTable() {
       const body = document.getElementById('dataset-body');
       if (!body) return;
-      const search = (document.getElementById('dataset-search') ? document.getElementById('dataset-search').value : '').toLowerCase();
       const stateF = document.getElementById('dataset-state-filter') ? document.getElementById('dataset-state-filter').value : '';
 
       let rows = _dsAllRows.filter(function (r) {
         if (stateF && r.state !== stateF) return false;
-        if (search) {
-          const text = ((r.state || '') + ' ' + (r.time || '') + ' ' + (r.timestamp || '')).toLowerCase();
-          if (text.indexOf(search) === -1) return false;
-        }
         return true;
       });
 

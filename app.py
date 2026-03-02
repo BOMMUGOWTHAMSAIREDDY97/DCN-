@@ -27,8 +27,8 @@ class NetworkState:
             "threshold": 0.4,
             "ftp_prio": "std"
         }
-        self.last_minute = None
-        self.last_state = "low"
+        self.last_log_time = 0
+        self.log_interval = 10 # Log every 10 seconds for better dynamics
         self.on_vercel = os.environ.get('VERCEL', '') == '1'
 
         # Real Traffic Baseline
@@ -95,29 +95,28 @@ class NetworkState:
                 time.sleep(5)
 
     def _background_logger(self):
-        """Infinite loop to log metrics aligned to 60-second minute boundaries."""
+        """Infinite loop for local environments to log metrics at 10s boundaries."""
         while True:
             try:
-                # 1. Wait until the start of the next minute (xx:00)
                 now = time.time()
-                sleep_time = 60 - (now % 60)
-                
-                # If we're extremely close to the current minute (e.g. 0.001s past), 
-                # sleep until the NEXT minute to avoid double-logging or race conditions
-                if sleep_time < 0.1: sleep_time += 60
-                
+                sleep_time = self.log_interval - (now % self.log_interval)
+                if sleep_time < 0.1: sleep_time += self.log_interval
                 time.sleep(sleep_time)
-                
-                # 2. Perform the log
                 self._log_to_db()
-                
             except Exception as e:
                 print(f"Error in background logger: {e}")
-                time.sleep(5) # Avoid rapid-fire errors
+                time.sleep(2)
 
     def _log_to_db(self):
         """Calculates metrics and inserts into SQLite."""
         try:
+            with self.lock:
+                now_ts = time.time()
+                # Prevent double-logging within the same interval
+                if now_ts - self.last_log_time < (self.log_interval - 1):
+                    return
+                self.last_log_time = now_ts
+
             metrics = self.get_current_metrics(internal=True)
             if not metrics:
                 return
@@ -374,6 +373,9 @@ state_manager = NetworkState()
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
+    # Trigger lazy log for serverless environments
+    if state_manager.on_vercel:
+        state_manager._log_to_db()
     return jsonify(state_manager.get_current_metrics())
 
 @app.route('/api/towers', methods=['GET'])
@@ -441,6 +443,9 @@ def get_dataset():
             LIMIT 1000
         """)
         rows = [dict(row) for row in cur.fetchall()]
+        # Trigger lazy log check on dataset fetch too
+        if state_manager.on_vercel:
+             state_manager._log_to_db()
         return jsonify(rows)
     except Exception as e:
         print(f"Error fetching logs: {e}")
