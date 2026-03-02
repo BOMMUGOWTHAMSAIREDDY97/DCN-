@@ -1794,10 +1794,13 @@
     }
 
     // Data stores
-    // Auto-detect backend: use localhost when developing, relative URL on Vercel
-    const BACKEND_URL = (window.location.protocol === 'file:' || (window.location.port !== '5002' && window.location.port !== ''))
-      ? 'http://127.0.0.1:5002'
-      : '';
+    // Auto-detect backend:
+    // - file:// protocol → always local dev
+    // - port 5002 → local Flask dev server
+    // - any other port (e.g. 3000, vite, etc.) → local dev
+    // - empty port (port 80/443, i.e. Vercel/production) → use relative URLs (Flask runs on same origin)
+    const isLocalDev = window.location.protocol === 'file:' || window.location.port !== '';
+    const BACKEND_URL = isLocalDev ? 'http://127.0.0.1:5002' : '';
 
     const N = 40;
     let delayData = Array.from({ length: N }, () => 10 + Math.random() * 8);

@@ -21,23 +21,33 @@ CORS(app)  # Enable CORS for all routes
 class NetworkState:
     def __init__(self):
         self.phase = 0.0
-        # Data history for moving averages or trends could be added here
         self.last_update = time.time()
         self.config = {
             "voip_alloc": 50,
             "threshold": 0.4,
             "ftp_prio": "std"
         }
-        self.last_minute = None # Track sampling interval
-        self.last_state = "low" # Track state transitions to prevent alert spam
-        
+        self.last_minute = None
+        self.last_state = "low"
+        self.on_vercel = os.environ.get('VERCEL', '') == '1'
+
         # Real Traffic Baseline
-        self.last_net_io = psutil.net_io_counters()
-        self.capacity_mbps = 100.0  # Max assumed local capacity for utilization calcs
+        self.capacity_mbps = 100.0
         self.current_load_mbps = 0.05
+        if not self.on_vercel:
+            try:
+                self.last_net_io = psutil.net_io_counters()
+            except Exception:
+                self.last_net_io = None
+        else:
+            self.last_net_io = None
         
-        # Initialize SQLite DB connection
-        self.db_path = "network_logs.db"
+        # Use /tmp for DB on Vercel (read-only FS); fall back to project dir locally
+        import tempfile
+        if self.on_vercel:
+            self.db_path = os.path.join(tempfile.gettempdir(), "network_logs.db")
+        else:
+            self.db_path = "network_logs.db"
         self._init_db()
         
         # Load Decision Tree Model
@@ -48,17 +58,18 @@ class NetworkState:
             print(f"Error loading model: {e}")
             self.model = None
 
-        # Thread safety for shared state (Using RLock to prevent deadlock)
+        # Thread safety for shared state
         self.lock = threading.RLock()
-        
-        # Start Background Threads
-        self.bg_thread = threading.Thread(target=self._background_logger, daemon=True)
-        self.bg_thread.start()
-        
-        self.traffic_thread = threading.Thread(target=self._traffic_monitor, daemon=True)
-        self.traffic_thread.start()
-        
-        print("Background Threads (Logger & Traffic) started")
+
+        # Background threads only make sense in a long-running process (not Vercel serverless)
+        if not self.on_vercel:
+            self.bg_thread = threading.Thread(target=self._background_logger, daemon=True)
+            self.bg_thread.start()
+            self.traffic_thread = threading.Thread(target=self._traffic_monitor, daemon=True)
+            self.traffic_thread.start()
+            print("Background Threads (Logger & Traffic) started")
+        else:
+            print("Vercel environment detected — background threads disabled")
 
     def _traffic_monitor(self):
         """Continuously samples network IO every 2 seconds to calculate a stable Mbps rate."""
@@ -296,26 +307,24 @@ class NetworkState:
                 if packet_loss > 1.0:
                      alerts.append({"time": now_str, "msg": f"ALERT: Elevated Packet Loss ({packet_loss:.1f}%) detected", "cls": "warn"})
     
-                # Get real active processes causing I/O traffic
+                # Get real active processes causing I/O traffic (local only — not available on Vercel)
                 active_processes = []
-                try:
-                    procs = []
-                    for p in psutil.process_iter(['name', 'io_counters']):
-                        try:
-                            # We score by IO bytes (read_bytes + write_bytes) if available on the OS
-                            io = p.info.get('io_counters')
-                            if io:
-                                total_io = getattr(io, 'read_bytes', getattr(io, 'read_count', 0)) + \
-                                           getattr(io, 'write_bytes', getattr(io, 'write_count', 0))
-                                procs.append((p.info['name'], total_io))
-                        except (psutil.NoSuchProcess, psutil.AccessDenied):
-                            continue
-                    
-                    # Sort active processes by total IO and take top 5
-                    sorted_procs = sorted(procs, key=lambda x: x[1], reverse=True)
-                    active_processes = [name for name, _ in sorted_procs[:5] if name != 'System Idle Process']
-                except Exception as e:
-                    print(f"Error fetching processes: {e}")
+                if not self.on_vercel:
+                    try:
+                        procs = []
+                        for p in psutil.process_iter(['name', 'io_counters']):
+                            try:
+                                io = p.info.get('io_counters')
+                                if io:
+                                    total_io = getattr(io, 'read_bytes', getattr(io, 'read_count', 0)) + \
+                                               getattr(io, 'write_bytes', getattr(io, 'write_count', 0))
+                                    procs.append((p.info['name'], total_io))
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                continue
+                        sorted_procs = sorted(procs, key=lambda x: x[1], reverse=True)
+                        active_processes = [name for name, _ in sorted_procs[:5] if name != 'System Idle Process']
+                    except Exception as e:
+                        print(f"Error fetching processes: {e}")
     
                 if not active_processes:
                     active_processes = ["System Kernel", "Network Interface", "DCN Controller"]
