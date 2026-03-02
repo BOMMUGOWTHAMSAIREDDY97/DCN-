@@ -30,6 +30,7 @@ class NetworkState:
         self.last_log_time = 0
         self.log_interval = 10 # Log every 10 seconds for better dynamics
         self.active_interface = "Scanning..."
+        self.last_state = "low"
         self.on_vercel = os.environ.get('VERCEL', '') == '1'
 
         # Real Traffic Baseline

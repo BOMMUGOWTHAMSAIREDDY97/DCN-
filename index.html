@@ -1151,7 +1151,7 @@
             <div class="metric-label">Queue Length</div>
           </div>
           <div
-            style="margin-top:12px; text-align:center; font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--dim);">
+            style="grid-column: span 3; margin-top:12px; text-align:center; font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--dim);">
             SOURCE: <span id="active-nic" style="color:var(--accent);">SCANNING...</span>
           </div>
         </div>
@@ -1880,8 +1880,19 @@
     }
 
     function getMockState() {
-      // Logic removed - server is mandatory for real-time data
-      return null;
+      // Enhanced mock for offline/dev mode
+      const now = Date.now() / 1000;
+      const total_load = 50 + 20 * Math.sin(now / 10);
+      return {
+        alerts: [{ time: new Date().toLocaleTimeString(), msg: "⚠ OFFLINE: Local Controller not detected. Displaying simulated telemetry.", cls: "warn" }],
+        processes: ["System Idle", "Browser Engine", "Network Stack"],
+        traffic: { voip: 85, http: 4.5, ftp: 1.2, aggregate: total_load },
+        monitoring: { arrival_rate: Math.floor(total_load * 12), delay: 12.5, queue_length: 230, interface: "SIMULATED" },
+        ml: { state: "low", confidence: 99.1, infer_time: 8 },
+        qos: { bandwidth: { voip: 20, http: 50, ftp: 30 }, queues: { voip: 10, http: 30, ftp: 60 } },
+        router: { link_utilization: Math.floor(total_load), queue_occupancy: 40 },
+        performance: { delay: 12.5, throughput: 4.8, packet_loss: 0.12 }
+      };
     }
 
     // API Data Poll
