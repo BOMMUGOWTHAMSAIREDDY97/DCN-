@@ -1150,6 +1150,10 @@
             <span class="metric-unit">pkts</span>
             <div class="metric-label">Queue Length</div>
           </div>
+          <div
+            style="margin-top:12px; text-align:center; font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--dim);">
+            SOURCE: <span id="active-nic" style="color:var(--accent);">SCANNING...</span>
+          </div>
         </div>
       </div>
 
@@ -1972,6 +1976,8 @@
         if (elArrivalRate) elArrivalRate.textContent = data.monitoring.arrival_rate;
         const elQueueVal = document.getElementById('queue-val');
         if (elQueueVal) elQueueVal.textContent = data.monitoring.queue_length;
+        const elActiveNic = document.getElementById('active-nic');
+        if (elActiveNic) elActiveNic.textContent = data.monitoring.interface || 'Auto-Select';
 
         // 6. Feature Extraction Animation
         const statusEl = document.getElementById('extraction-status');

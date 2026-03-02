@@ -29,6 +29,7 @@ class NetworkState:
         }
         self.last_log_time = 0
         self.log_interval = 10 # Log every 10 seconds for better dynamics
+        self.active_interface = "Scanning..."
         self.on_vercel = os.environ.get('VERCEL', '') == '1'
 
         # Real Traffic Baseline
@@ -76,17 +77,40 @@ class NetworkState:
         while True:
             try:
                 t1 = time.time()
-                io1 = psutil.net_io_counters()
+                io1 = psutil.net_io_counters(pernic=True)
                 time.sleep(2)
                 t2 = time.time()
-                io2 = psutil.net_io_counters()
+                io2 = psutil.net_io_counters(pernic=True)
                 
                 dt = t2 - t1
-                bytes_sent = io2.bytes_sent - io1.bytes_sent
-                bytes_recv = io2.bytes_recv - io1.bytes_recv
                 
+                # Filter for Wi-Fi or Data (Cellular) interfaces primarily
+                total_bytes = 0
+                preferred_interfaces = ['wi-fi', 'wifi', 'cellular', 'mobile data', 'ethernet']
+                
+                # Check for activity on preferred interfaces
+                active_nics = []
+                for nic, stats1 in io1.items():
+                    if any(pref in nic.lower() for pref in preferred_interfaces):
+                        if nic in io2:
+                            stats2 = io2[nic]
+                            diff = (stats2.bytes_sent - stats1.bytes_sent) + (stats2.bytes_recv - stats1.bytes_recv)
+                            if diff > 0:
+                                total_bytes += diff
+                                active_nics.append(nic)
+                
+                # Fallback: if no hardware nics show activity, check everything else except loopback
+                if total_bytes == 0:
+                    for nic, stats1 in io1.items():
+                        if 'loopback' not in nic.lower() and 'pseudo' not in nic.lower():
+                            if nic in io2:
+                                stats2 = io2[nic]
+                                total_bytes += (stats2.bytes_sent - stats1.bytes_sent) + (stats2.bytes_recv - stats1.bytes_recv)
+                                if total_bytes > 0: active_nics.append(nic)
+
                 with self.lock:
-                    self.current_load_mbps = ((bytes_sent + bytes_recv) * 8) / (dt * 1000000)
+                    self.current_load_mbps = (total_bytes * 8) / (dt * 1000000)
+                    self.active_interface = active_nics[0] if active_nics else "Auto-Select"
                     # Smoothly decay if 0, but keep at least a tiny baseline
                     self.current_load_mbps = max(0.01, self.current_load_mbps)
                     
@@ -339,7 +363,8 @@ class NetworkState:
                     "monitoring": {
                         "arrival_rate": arrival_rate,
                         "delay": round(base_delay, 1),
-                        "queue_length": queue_length
+                        "queue_length": queue_length,
+                        "interface": self.active_interface
                     },
                     "ml": {
                         "state": state,
