@@ -10,3 +10,6 @@ dist/
 build/
 *.db
 *.sqlite
+*.db-journal
+*.db-wal
+*.db-shm
