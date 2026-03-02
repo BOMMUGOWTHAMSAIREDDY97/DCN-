@@ -2138,7 +2138,7 @@
 
       if (!Array.isArray(data) || data.length === 0) {
         if (countEl) { countEl.textContent = '0 rows'; countEl.style.color = 'var(--dim)'; }
-        if (emptyMsg) emptyMsg.innerText = 'No records in DB yet.\n\nThe logger writes every 60 seconds at minute boundaries.\nClick "SEED 24H DATA" to populate immediately for demo.';
+        if (emptyMsg) emptyMsg.innerText = 'No records in DB yet.\n\nThe logger writes every 10 seconds.\nClick "SEED 24H DATA" to populate immediately for demo.';
         if (emptyState) emptyState.style.display = 'flex';
         if (table) table.style.display = 'none';
         return;
