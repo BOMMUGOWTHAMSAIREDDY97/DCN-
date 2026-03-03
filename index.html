@@ -1790,9 +1790,17 @@
       canvas.height = H * devicePixelRatio;
       ctx.scale(devicePixelRatio, devicePixelRatio);
       ctx.clearRect(0, 0, W, H);
-      const min = Math.min(...data), max = Math.max(...data);
+
+      let min = Math.min(...data), max = Math.max(...data);
+      if (max === min) { min -= 0.1; max += 0.1; } // Prevent flat lines looking dead
+
       const range = max - min || 1;
-      const pts = data.map((v, i) => [i / (data.length - 1) * W, H - ((v - min) / range * (H - 10) + 5)]);
+      const pts = data.map((v, i) => {
+        // Add tiny visual jitter only for the line if the backend is perfectly steady
+        const jitter = (Math.random() - 0.5) * (range * 0.02);
+        const val = v + jitter;
+        return [i / (data.length - 1) * W, H - ((val - min) / range * (H - 10) + 5)];
+      });
       if (fill) {
         ctx.beginPath();
         ctx.moveTo(pts[0][0], H);
@@ -1835,19 +1843,20 @@
       BACKEND_URL = '';                               // Vercel / same-origin production
     }
 
-    // Topology Animation Logic
+    // Topology Animation Logic: Hub-and-Spoke Process Map
     const topoCanvas = document.getElementById('topologyCanvas');
     let topoCtx = null;
-    let topoNodes = [
-      { id: 'client', label: 'Local Host', x: 0.15, y: 0.5, icon: '🏠' },
-      { id: 'router', label: 'DCN Edge', x: 0.5, y: 0.5, icon: '⬢' },
-      { id: 'cloud', label: 'External', x: 0.85, y: 0.5, icon: '☁' }
-    ];
+    let topoNodes = [];
     let topoPackets = [];
 
     function initTopology() {
       if (!topoCanvas) return;
       topoCtx = topoCanvas.getContext('2d');
+      // Create permanent base nodes
+      topoNodes = [
+        { id: 'controller', label: 'DCN CONTROLLER', x: 0.5, y: 0.5, icon: '⬢', type: 'core', size: 25 },
+        { id: 'gateway', label: 'EXTERNAL GW', x: 0.9, y: 0.5, icon: '☁', type: 'target', size: 18 }
+      ];
       animateTopology();
     }
 
@@ -1861,67 +1870,101 @@
 
       topoCtx.clearRect(0, 0, W, H);
 
-      // Draw connections
-      topoCtx.beginPath();
-      topoCtx.moveTo(topoNodes[0].x * W, topoNodes[0].y * H);
-      topoCtx.lineTo(topoNodes[1].x * W, topoNodes[1].y * H);
-      topoCtx.lineTo(topoNodes[2].x * W, topoNodes[2].y * H);
-      topoCtx.strokeStyle = 'rgba(0, 212, 255, 0.2)';
-      topoCtx.lineWidth = 1;
-      topoCtx.stroke();
+      // 1. Synchronize process nodes from lastMetrics
+      const processes = (window.lastMetrics && window.lastMetrics.processes) ? window.lastMetrics.processes : ["System Stack", "Network Driver"];
+      const targetNodeCount = processes.length;
 
-      // Update and draw packets
-      const load = window.lastMetrics ? window.lastMetrics.traffic.aggregate : 1;
-      const spawnRate = Math.min(0.3, load / 100);
+      // Remove process nodes that are no longer active
+      topoNodes = topoNodes.filter(n => n.type !== 'process' || processes.includes(n.id));
+
+      // Add or update process nodes
+      processes.forEach((p, i) => {
+        let node = topoNodes.find(n => n.id === p);
+        if (!node) {
+          node = {
+            id: p, label: p.substring(0, 15),
+            x: 0.1, y: 0.2 + (i * 0.15),
+            icon: '⚙', type: 'process', size: 12,
+            targetY: 0.1 + (i / targetNodeCount) * 0.8
+          };
+          topoNodes.push(node);
+        }
+        // Smoothly slide to current target Y
+        node.targetY = 0.1 + (i / (processes.length)) * 0.8;
+        node.y += (node.targetY - node.y) * 0.05;
+      });
+
+      const core = topoNodes.find(n => n.id === 'controller');
+      const gw = topoNodes.find(n => n.id === 'gateway');
+
+      // 2. Draw Connections (Links)
+      topoCtx.setLineDash([5, 5]);
+      topoCtx.beginPath();
+      topoNodes.filter(n => n.type === 'process').forEach(n => {
+        topoCtx.moveTo(n.x * W, n.y * H);
+        topoCtx.lineTo(core.x * W, core.y * H);
+      });
+      topoCtx.moveTo(core.x * W, core.y * H);
+      topoCtx.lineTo(gw.x * W, gw.y * H);
+      topoCtx.strokeStyle = 'rgba(0, 212, 255, 0.15)';
+      topoCtx.stroke();
+      topoCtx.setLineDash([]);
+
+      // 3. Update and draw packets (Traffic Flow)
+      const load = window.lastMetrics ? window.lastMetrics.traffic.aggregate : 5;
+      // Spawn based on load
+      const spawnRate = Math.min(0.5, (load / 20));
 
       if (Math.random() < spawnRate) {
-        // Forward packet
-        topoPackets.push({ from: 0, to: 1, pos: 0, speed: 0.01 + Math.random() * 0.01 });
+        const procs = topoNodes.filter(n => n.type === 'process');
+        const start = procs[Math.floor(Math.random() * procs.length)] || topoNodes[0];
+        topoPackets.push({ from: start, to: core, pos: 0, speed: 0.01 + Math.random() * 0.01 });
       }
-      if (Math.random() < spawnRate * 0.8) {
-        // Return packet
-        topoPackets.push({ from: 2, to: 1, pos: 0, speed: 0.01 + Math.random() * 0.01 });
+      if (Math.random() < spawnRate * 0.7) {
+        topoPackets.push({ from: core, to: gw, pos: 0, speed: 0.015 + Math.random() * 0.01 });
       }
 
       topoPackets = topoPackets.filter(p => {
         p.pos += p.speed;
-        const start = topoNodes[p.from];
-        const end = topoNodes[p.to];
-        const px = (start.x + (end.x - start.x) * p.pos) * W;
-        const py = (start.y + (end.y - start.y) * p.pos) * H;
+        const px = (p.from.x + (p.to.x - p.from.x) * p.pos) * W;
+        const py = (p.from.y + (p.to.y - p.from.y) * p.pos) * H;
 
         topoCtx.beginPath();
-        topoCtx.arc(px, py, 2, 0, Math.PI * 2);
-        topoCtx.fillStyle = p.from === 0 ? '#00ff88' : '#00d4ff';
+        topoCtx.arc(px, py, 2.5, 0, Math.PI * 2);
+        topoCtx.fillStyle = 'var(--accent)';
+        topoCtx.shadowBlur = 8;
+        topoCtx.shadowColor = 'var(--accent)';
         topoCtx.fill();
+        topoCtx.shadowBlur = 0;
 
-        if (p.pos >= 1 && p.to === 1) {
-          p.from = 1; p.to = (p.from === 0 ? 1 : 2); // basic routing sim
-          p.pos = 0;
-          if (Math.random() > 0.95) return false;
-        }
         return p.pos < 1;
       });
 
-      // Draw nodes
+      // 4. Draw Nodes
       topoNodes.forEach(n => {
         const nx = n.x * W;
         const ny = n.y * H;
 
-        // Glow
-        topoCtx.beginPath();
-        topoCtx.arc(nx, ny, 15, 0, Math.PI * 2);
-        topoCtx.fillStyle = 'rgba(0, 212, 255, 0.05)';
-        topoCtx.fill();
+        // Pulse effect for core
+        if (n.type === 'core') {
+          const pulse = 1 + 0.1 * Math.sin(Date.now() / 300);
+          topoCtx.beginPath();
+          topoCtx.arc(nx, ny, n.size * pulse, 0, Math.PI * 2);
+          topoCtx.fillStyle = 'rgba(0, 212, 255, 0.05)';
+          topoCtx.strokeStyle = 'rgba(0, 212, 255, 0.3)';
+          topoCtx.stroke();
+          topoCtx.fill();
+        }
 
-        topoCtx.font = '16px serif';
+        topoCtx.font = (n.size * 0.8) + 'px serif';
         topoCtx.textAlign = 'center';
         topoCtx.textBaseline = 'middle';
+        topoCtx.fillStyle = n.type === 'process' ? 'var(--green)' : 'var(--accent)';
         topoCtx.fillText(n.icon, nx, ny);
 
-        topoCtx.font = '8px "Share Tech Mono"';
-        topoCtx.fillStyle = 'var(--dim)';
-        topoCtx.fillText(n.label, nx, ny + 25);
+        topoCtx.font = '7px "Share Tech Mono"';
+        topoCtx.fillStyle = n.type === 'process' ? 'var(--dim)' : 'var(--accent)';
+        topoCtx.fillText(n.label, nx, ny + n.size + 5);
       });
 
       requestAnimationFrame(animateTopology);
