@@ -1383,18 +1383,18 @@
           </div>
           <div
             style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);color:var(--dim);">
-            <span>Accuracy</span><span style="color:var(--green);">96.8%</span>
+            <span>Accuracy</span><span id="model-acc" style="color:var(--green);">96.8%</span>
           </div>
           <div
             style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);color:var(--dim);">
-            <span>Precision</span><span style="color:var(--green);">95.3%</span>
+            <span>Precision</span><span id="model-pre" style="color:var(--green);">95.3%</span>
           </div>
           <div
             style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);color:var(--dim);">
-            <span>Recall</span><span style="color:var(--green);">97.1%</span>
+            <span>Recall</span><span id="model-rec" style="color:var(--green);">97.1%</span>
           </div>
           <div style="display:flex;justify-content:space-between;padding:6px 0;color:var(--dim);">
-            <span>F1 Score</span><span style="color:var(--green);">0.962</span>
+            <span>F1 Score</span><span id="model-f1" style="color:var(--green);">0.962</span>
           </div>
         </div>
       </div>
@@ -2305,6 +2305,16 @@
         // 13. Heartbeat indicator
         const hbStatus = document.getElementById('proc-sync-status');
         if (hbStatus) hbStatus.textContent = "Status: SYNC " + new Date().toTimeString().slice(0, 8);
+
+        // 14. Dynamic Model Stats Variation
+        const elAcc = document.getElementById('model-acc');
+        if (elAcc) elAcc.textContent = (96.75 + Math.random() * 0.15).toFixed(1) + '%';
+        const elPre = document.getElementById('model-pre');
+        if (elPre) elPre.textContent = (95.2 + Math.random() * 0.2).toFixed(1) + '%';
+        const elRec = document.getElementById('model-rec');
+        if (elRec) elRec.textContent = (97.0 + Math.random() * 0.15).toFixed(1) + '%';
+        const elF1 = document.getElementById('model-f1');
+        if (elF1) elF1.textContent = (0.961 + Math.random() * 0.003).toFixed(3);
       } catch (e) {
         console.warn("Error processing data:", e);
       }
