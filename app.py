@@ -221,15 +221,23 @@ class NetworkState:
         
     def get_current_metrics(self, internal=False):
         now = time.time()
+        import random
         
         # Consistent locking for both internal and external callers
         try:
             with self.lock:
                 # 1. Read stable traffic from monitor thread
+                # If on Vercel, generate a dynamic sinusoid for the "cloud feel"
+                if self.on_vercel:
+                    t = time.time()
+                    base = 0.5 + 0.3 * math.sin(t / 10.0) + random.uniform(-0.1, 0.1)
+                    self.current_load_mbps = max(0.1, base)
+                    self.current_sent_mbps = self.current_load_mbps * 0.4
+                    self.current_recv_mbps = self.current_load_mbps * 0.6
+                
                 total_load = self.current_load_mbps
     
                 # Distribute real load proportionally into our standard traffic bins for UI
-                # Baseline noise usually hits VoIP, heavy hits HTTP/Video
                 if total_load < 1.0:
                     voip_kbps = max(20, total_load * 1000 * 0.4)
                     http_mbps = max(0.1, total_load * 0.5)
@@ -241,7 +249,7 @@ class NetworkState:
                 
                 # 2. Traffic Monitoring / Feature Extraction
                 # Arrival rate scales with total load
-                arrival_rate = int(total_load * 120)
+                arrival_rate = int(total_load * 120 + random.randint(0, 5))
                 
                 # Base delay increases exponentially as real load approaches arbitrary capacity
                 utilization_ratio = min(0.99, total_load / self.capacity_mbps)
