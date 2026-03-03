@@ -1852,6 +1852,13 @@
     let topoNodes = [];
     let topoPackets = [];
 
+    const TRAFFIC_COLORS = {
+      voip: '#00ff88',  // Neon Green
+      http: '#00d4ff',  // Cyan
+      ftp: '#ffb700',   // Amber
+      std: '#3a6a80'    // Dim Blue
+    };
+
     function initTopology() {
       if (!topoCanvas) return;
       topoCtx = topoCanvas.getContext('2d');
@@ -1861,6 +1868,20 @@
         { id: 'gateway', label: 'EXTERNAL GW', x: 0.9, y: 0.5, icon: '☁', type: 'target', size: 25 }
       ];
       animateTopology();
+    }
+
+    function getProcessCategory(procName) {
+      const name = procName.toLowerCase();
+      const map = {
+        voip: ["zoom", "teams", "discord", "skype", "whatsapp", "slack"],
+        http: ["chrome", "msedge", "firefox", "brave", "opera", "iexplore", "python"],
+        ftp: ["filezilla", "winscp", "steam", "epicgameslauncher", "bittorrent", "utorrent", "idm"]
+      };
+
+      for (const [cat, keywords] of Object.entries(map)) {
+        if (keywords.some(kw => name.includes(kw))) return cat;
+      }
+      return 'std';
     }
 
     function animateTopology() {
@@ -1888,6 +1909,7 @@
             id: p, label: p.substring(0, 15),
             x: 0.1, y: 0.2 + (i * 0.15),
             icon: '⚙', type: 'process', size: 20,
+            category: getProcessCategory(p),
             targetY: 0.1 + (i / targetNodeCount) * 0.8
           };
           topoNodes.push(node);
@@ -1915,16 +1937,36 @@
 
       // 3. Update and draw packets (Traffic Flow)
       const load = window.lastMetrics ? window.lastMetrics.traffic.aggregate : 5;
+      const state = window.lastMetrics ? window.lastMetrics.ml.state : 'low';
+
       // Spawn based on load
-      const spawnRate = Math.min(0.5, (load / 20));
+      const spawnRate = Math.min(0.6, (load / 15));
 
       if (Math.random() < spawnRate) {
         const procs = topoNodes.filter(n => n.type === 'process');
-        const start = procs[Math.floor(Math.random() * procs.length)] || topoNodes[0];
-        topoPackets.push({ from: start, to: core, pos: 0, speed: 0.01 + Math.random() * 0.01 });
+        const start = procs[Math.floor(Math.random() * procs.length)];
+        if (start) {
+          topoPackets.push({
+            from: start, to: core, pos: 0,
+            speed: 0.012 + Math.random() * 0.01,
+            color: TRAFFIC_COLORS[start.category] || TRAFFIC_COLORS.std
+          });
+        }
       }
-      if (Math.random() < spawnRate * 0.7) {
-        topoPackets.push({ from: core, to: gw, pos: 0, speed: 0.015 + Math.random() * 0.01 });
+
+      if (Math.random() < spawnRate * 0.8) {
+        // GW packets use the majority bucket color
+        let gwColor = TRAFFIC_COLORS.http;
+        if (window.lastMetrics) {
+          const t = window.lastMetrics.traffic;
+          if (t.voip > 200) gwColor = TRAFFIC_COLORS.voip;
+          else if (t.ftp > 5) gwColor = TRAFFIC_COLORS.ftp;
+        }
+        topoPackets.push({
+          from: core, to: gw, pos: 0,
+          speed: 0.015 + Math.random() * 0.01,
+          color: gwColor
+        });
       }
 
       topoPackets = topoPackets.filter(p => {
@@ -1933,10 +1975,10 @@
         const py = (p.from.y + (p.to.y - p.from.y) * p.pos) * H;
 
         topoCtx.beginPath();
-        topoCtx.arc(px, py, 2.5, 0, Math.PI * 2);
-        topoCtx.fillStyle = 'var(--accent)';
-        topoCtx.shadowBlur = 8;
-        topoCtx.shadowColor = 'var(--accent)';
+        topoCtx.arc(px, py, 2.8, 0, Math.PI * 2);
+        topoCtx.fillStyle = p.color;
+        topoCtx.shadowBlur = 10;
+        topoCtx.shadowColor = p.color;
         topoCtx.fill();
         topoCtx.shadowBlur = 0;
 
@@ -1950,11 +1992,15 @@
 
         // Pulse effect for core
         if (n.type === 'core') {
-          const pulse = 1 + 0.1 * Math.sin(Date.now() / 300);
+          const pulseColor = state === 'high' ? 'rgba(255, 51, 85, 0.1)' : (state === 'med' ? 'rgba(255, 183, 0, 0.1)' : 'rgba(0, 212, 255, 0.05)');
+          const strokeColor = state === 'high' ? 'rgba(255, 51, 85, 0.4)' : (state === 'med' ? 'rgba(255, 183, 0, 0.4)' : 'rgba(0, 212, 255, 0.3)');
+          const pulse = 1 + 0.12 * Math.sin(Date.now() / 250);
+
           topoCtx.beginPath();
           topoCtx.arc(nx, ny, n.size * pulse, 0, Math.PI * 2);
-          topoCtx.fillStyle = 'rgba(0, 212, 255, 0.05)';
-          topoCtx.strokeStyle = 'rgba(0, 212, 255, 0.3)';
+          topoCtx.fillStyle = pulseColor;
+          topoCtx.strokeStyle = strokeColor;
+          topoCtx.lineWidth = 2;
           topoCtx.stroke();
           topoCtx.fill();
         }
@@ -1962,8 +2008,15 @@
         topoCtx.font = (n.size * 0.8) + 'px serif';
         topoCtx.textAlign = 'center';
         topoCtx.textBaseline = 'middle';
-        topoCtx.fillStyle = n.type === 'process' ? 'var(--green)' : 'var(--accent)';
+        let iconColor = n.type === 'process' ? (TRAFFIC_COLORS[n.category] || TRAFFIC_COLORS.std) : 'var(--accent)';
+        if (n.type === 'core' && state === 'high') iconColor = 'var(--red)';
+        if (n.type === 'core' && state === 'med') iconColor = 'var(--yellow)';
+
+        topoCtx.fillStyle = iconColor;
+        topoCtx.shadowBlur = 12;
+        topoCtx.shadowColor = iconColor;
         topoCtx.fillText(n.icon, nx, ny);
+        topoCtx.shadowBlur = 0;
 
         topoCtx.font = '7px "Share Tech Mono"';
         topoCtx.fillStyle = n.type === 'process' ? 'var(--dim)' : 'var(--accent)';
