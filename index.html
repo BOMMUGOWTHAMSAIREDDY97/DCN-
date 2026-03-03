@@ -1068,6 +1068,9 @@
     <div class="logo">DCN<span>PROJECT</span></div>
     <div class="status-bar">
       <span>SYS: <span class="live" id="sys-status">● ONLINE</span></span>
+      <span id="connection-mode"
+        style="border: 1px solid var(--border); padding: 0 8px; color: var(--accent); font-weight: bold;">LOCAL
+        AGENT</span>
       <span>NODES: 24</span>
       <span>UPTIME: 99.97%</span>
       <span id="clock">00:00:00</span>
@@ -1854,8 +1857,8 @@
       topoCtx = topoCanvas.getContext('2d');
       // Create permanent base nodes
       topoNodes = [
-        { id: 'controller', label: 'DCN CONTROLLER', x: 0.5, y: 0.5, icon: '⬢', type: 'core', size: 25 },
-        { id: 'gateway', label: 'EXTERNAL GW', x: 0.9, y: 0.5, icon: '☁', type: 'target', size: 18 }
+        { id: 'controller', label: 'DCN CONTROLLER', x: 0.5, y: 0.5, icon: '⬢', type: 'core', size: 35 },
+        { id: 'gateway', label: 'EXTERNAL GW', x: 0.9, y: 0.5, icon: '☁', type: 'target', size: 25 }
       ];
       animateTopology();
     }
@@ -1884,7 +1887,7 @@
           node = {
             id: p, label: p.substring(0, 15),
             x: 0.1, y: 0.2 + (i * 0.15),
-            icon: '⚙', type: 'process', size: 12,
+            icon: '⚙', type: 'process', size: 20,
             targetY: 0.1 + (i / targetNodeCount) * 0.8
           };
           topoNodes.push(node);
@@ -2062,13 +2065,24 @@
         const res = await fetch(`${BACKEND_URL}/api/status`);
         if (!res.ok) throw new Error("HTTP Request Failed");
         data = await res.json();
+
+        // Update connection tags
         const statusEl = document.getElementById('sys-status');
         if (statusEl) { statusEl.textContent = '● ONLINE'; statusEl.style.color = 'var(--green)'; }
+        const modeEl = document.getElementById('connection-mode');
+        if (modeEl) {
+          const isVercel = (data.monitoring.interface || "").toLowerCase().includes('vercel');
+          modeEl.textContent = isVercel ? 'CLOUD SIM' : 'REAL HARDWARE';
+          modeEl.style.color = isVercel ? 'var(--yellow)' : 'var(--green)';
+          modeEl.style.borderColor = isVercel ? 'var(--yellow)' : 'var(--green)';
+        }
       } catch (e) {
         // Fallback to standalone mode if backend is not running
         data = getMockState();
         const statusEl = document.getElementById('sys-status');
         if (statusEl) { statusEl.textContent = '● SIMULATED'; statusEl.style.color = 'var(--yellow)'; }
+        const modeEl = document.getElementById('connection-mode');
+        if (modeEl) { modeEl.textContent = 'LOCAL OFFLINE'; modeEl.style.color = 'var(--red)'; modeEl.style.borderColor = 'var(--red)'; }
       }
 
       if (!data) return; // Prevention for null data parsing
