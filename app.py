@@ -252,17 +252,19 @@ class NetworkState:
                 arrival_rate = int(total_load * 120 + random.randint(0, 5))
                 
                 # Base delay increases exponentially as real load approaches arbitrary capacity
-                # Lowering virtual capacity to 50 Mbps makes it more sensitive to user activity
-                utilization_ratio = min(0.99, total_load / 50.0) 
+                # Lowering virtual capacity to 25 Mbps for high sensitivity to Wi-Fi/Mobile browsing
+                virtual_capacity = 25.0
+                utilization_ratio = min(0.99, total_load / virtual_capacity) 
                 # Add natural jitter even at low load
                 jitter = random.uniform(-0.5, 0.5) if total_load > 0 else 0
                 base_delay = (5.0 / (1.0 - utilization_ratio)) + jitter
                 
-                # Queue length builds up when load exceeds 20% of capacity
-                # More sensitive: starts building at 10 Mbps load (0.2 * 50)
-                queue_length = int(max(0, (total_load - 10.0) * 15))
-                # Random tiny fluctuations in queue if it's active
-                if queue_length > 0: queue_length += random.randint(-1, 1)
+                # Active Queue activity (starting at 1 Mbps - typical web browsing)
+                if total_load > 0.1:
+                    queue_length = 5 + int(max(0, (total_load - 1.0) * 20))
+                    queue_length += random.randint(-1, 1)
+                else: 
+                    queue_length = 0
                 queue_length = max(0, queue_length)
                 
                 # 3. Decision Tree ML for Traffic Network
