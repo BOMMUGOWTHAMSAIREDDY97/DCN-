@@ -86,7 +86,8 @@ class NetworkState:
                 dt = t2 - t1
                 
                 # Filter for Wi-Fi or Data (Cellular) interfaces primarily
-                total_bytes = 0
+                sent_bytes = 0
+                recv_bytes = 0
                 preferred_interfaces = ['wi-fi', 'wifi', 'cellular', 'mobile data', 'ethernet']
                 
                 # Check for activity on preferred interfaces
@@ -95,22 +96,29 @@ class NetworkState:
                     if any(pref in nic.lower() for pref in preferred_interfaces):
                         if nic in io2:
                             stats2 = io2[nic]
-                            diff = (stats2.bytes_sent - stats1.bytes_sent) + (stats2.bytes_recv - stats1.bytes_recv)
-                            if diff > 0:
-                                total_bytes += diff
+                            s_diff = stats2.bytes_sent - stats1.bytes_sent
+                            r_diff = stats2.bytes_recv - stats1.bytes_recv
+                            if s_diff > 0 or r_diff > 0:
+                                sent_bytes += s_diff
+                                recv_bytes += r_diff
                                 active_nics.append(nic)
                 
                 # Fallback: if no hardware nics show activity, check everything else except loopback
-                if total_bytes == 0:
+                if (sent_bytes + recv_bytes) == 0:
                     for nic, stats1 in io1.items():
                         if 'loopback' not in nic.lower() and 'pseudo' not in nic.lower():
                             if nic in io2:
                                 stats2 = io2[nic]
-                                total_bytes += (stats2.bytes_sent - stats1.bytes_sent) + (stats2.bytes_recv - stats1.bytes_recv)
-                                if total_bytes > 0: active_nics.append(nic)
+                                s_diff = stats2.bytes_sent - stats1.bytes_sent
+                                r_diff = stats2.bytes_recv - stats1.bytes_recv
+                                sent_bytes += s_diff
+                                recv_bytes += r_diff
+                                if (s_diff + r_diff) > 0: active_nics.append(nic)
 
                 with self.lock:
-                    self.current_load_mbps = (total_bytes * 8) / (dt * 1000000)
+                    self.current_sent_mbps = (sent_bytes * 8) / (dt * 1000000)
+                    self.current_recv_mbps = (recv_bytes * 8) / (dt * 1000000)
+                    self.current_load_mbps = self.current_sent_mbps + self.current_recv_mbps
                     self.active_interface = active_nics[0] if active_nics else "Auto-Select"
                     # Smoothly decay if 0, but keep at least a tiny baseline
                     self.current_load_mbps = max(0.01, self.current_load_mbps)
@@ -359,7 +367,9 @@ class NetworkState:
                         "voip": round(voip_kbps),
                         "http": round(http_mbps, 1),
                         "ftp": round(ftp_mbps, 1),
-                        "aggregate": round(total_load, 1) # for the sparkline
+                        "aggregate": round(total_load, 1),
+                        "sent": round(getattr(self, 'current_sent_mbps', 0), 2),
+                        "recv": round(getattr(self, 'current_recv_mbps', 0), 2)
                     },
                     "monitoring": {
                         "arrival_rate": arrival_rate,

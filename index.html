@@ -1067,7 +1067,7 @@
   <header>
     <div class="logo">DCN<span>PROJECT</span></div>
     <div class="status-bar">
-      <span>SYS: <span class="live">● ONLINE</span></span>
+      <span>SYS: <span class="live" id="sys-status">● ONLINE</span></span>
       <span>NODES: 24</span>
       <span>UPTIME: 99.97%</span>
       <span id="clock">00:00:00</span>
@@ -1286,16 +1286,40 @@
 
       <div class="connector">▼</div>
 
-      <!-- Bottleneck Router -->
-      <div class="router-panel">
-        <div class="panel-title">◈ Bottleneck Router / Link</div>
-        <div class="router-viz">
-          <div class="router-node">🖥</div>
-          <div class="link-line"></div>
-          <div class="router-node" style="border-color:var(--yellow);animation-name:pulse-y;">⬡</div>
-          <div class="link-line"></div>
-          <div class="router-node">🖥</div>
+      <!-- Network Topology Viz -->
+      <div class="panel" style="grid-column: span 1; min-height: 250px;">
+        <div class="panel-title" style="color:var(--accent);">⬢ Real-time Network Topology</div>
+        <div
+          style="position: relative; height: 160px; background: rgba(0,0,0,0.2); border: 1px solid rgba(10,64,96,0.3); margin-top: 10px; overflow: hidden;">
+          <canvas id="topologyCanvas" style="width: 100%; height: 100%;"></canvas>
+          <div
+            style="position: absolute; top: 10px; left: 10px; font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: var(--dim); pointer-events: none;">
+            NODE STATUS: <span style="color: var(--green); animation: blink 1.5s infinite;">ACTIVE</span><br>
+            MAP MODE: L7 TOPOLOGY
+          </div>
+          <div id="topo-load-display"
+            style="position: absolute; bottom: 10px; right: 10px; font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; color: var(--accent); pointer-events: none;">
+            LOAD: -- Mbps
+          </div>
         </div>
+        <div
+          style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.75rem; font-family: 'Share Tech Mono', monospace;">
+          <div style="border: 1px solid var(--border); padding: 5px 8px; background: rgba(0,0,0,0.2);">
+            <span style="color: var(--dim);">TX RATE:</span> <span id="topo-tx" style="color: var(--green);">0.0</span>
+            <span style="color: var(--dim);">Mb/s</span>
+          </div>
+          <div style="border: 1px solid var(--border); padding: 5px 8px; background: rgba(0,0,0,0.2);">
+            <span style="color: var(--dim);">RX RATE:</span> <span id="topo-rx" style="color: var(--accent);">0.0</span>
+            <span style="color: var(--dim);">Mb/s</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">▼</div>
+
+      <!-- Bottleneck Router (Simplified/Integrated) -->
+      <div class="router-panel">
+        <div class="panel-title">◈ Link Utilization & Queue Metrics</div>
         <div class="utilization-wrap">
           <div class="util-row"><span class="util-label">Link Utilization</span><span class="util-val"
               id="link-util">67%</span></div>
@@ -1811,11 +1835,104 @@
       BACKEND_URL = '';                               // Vercel / same-origin production
     }
 
+    // Topology Animation Logic
+    const topoCanvas = document.getElementById('topologyCanvas');
+    let topoCtx = null;
+    let topoNodes = [
+      { id: 'client', label: 'Local Host', x: 0.15, y: 0.5, icon: '🏠' },
+      { id: 'router', label: 'DCN Edge', x: 0.5, y: 0.5, icon: '⬢' },
+      { id: 'cloud', label: 'External', x: 0.85, y: 0.5, icon: '☁' }
+    ];
+    let topoPackets = [];
+
+    function initTopology() {
+      if (!topoCanvas) return;
+      topoCtx = topoCanvas.getContext('2d');
+      animateTopology();
+    }
+
+    function animateTopology() {
+      if (!topoCtx) return;
+      const W = topoCanvas.clientWidth;
+      const H = topoCanvas.clientHeight;
+      topoCanvas.width = W * devicePixelRatio;
+      topoCanvas.height = H * devicePixelRatio;
+      topoCtx.scale(devicePixelRatio, devicePixelRatio);
+
+      topoCtx.clearRect(0, 0, W, H);
+
+      // Draw connections
+      topoCtx.beginPath();
+      topoCtx.moveTo(topoNodes[0].x * W, topoNodes[0].y * H);
+      topoCtx.lineTo(topoNodes[1].x * W, topoNodes[1].y * H);
+      topoCtx.lineTo(topoNodes[2].x * W, topoNodes[2].y * H);
+      topoCtx.strokeStyle = 'rgba(0, 212, 255, 0.2)';
+      topoCtx.lineWidth = 1;
+      topoCtx.stroke();
+
+      // Update and draw packets
+      const load = window.lastMetrics ? window.lastMetrics.traffic.aggregate : 1;
+      const spawnRate = Math.min(0.3, load / 100);
+
+      if (Math.random() < spawnRate) {
+        // Forward packet
+        topoPackets.push({ from: 0, to: 1, pos: 0, speed: 0.01 + Math.random() * 0.01 });
+      }
+      if (Math.random() < spawnRate * 0.8) {
+        // Return packet
+        topoPackets.push({ from: 2, to: 1, pos: 0, speed: 0.01 + Math.random() * 0.01 });
+      }
+
+      topoPackets = topoPackets.filter(p => {
+        p.pos += p.speed;
+        const start = topoNodes[p.from];
+        const end = topoNodes[p.to];
+        const px = (start.x + (end.x - start.x) * p.pos) * W;
+        const py = (start.y + (end.y - start.y) * p.pos) * H;
+
+        topoCtx.beginPath();
+        topoCtx.arc(px, py, 2, 0, Math.PI * 2);
+        topoCtx.fillStyle = p.from === 0 ? '#00ff88' : '#00d4ff';
+        topoCtx.fill();
+
+        if (p.pos >= 1 && p.to === 1) {
+          p.from = 1; p.to = (p.from === 0 ? 1 : 2); // basic routing sim
+          p.pos = 0;
+          if (Math.random() > 0.95) return false;
+        }
+        return p.pos < 1;
+      });
+
+      // Draw nodes
+      topoNodes.forEach(n => {
+        const nx = n.x * W;
+        const ny = n.y * H;
+
+        // Glow
+        topoCtx.beginPath();
+        topoCtx.arc(nx, ny, 15, 0, Math.PI * 2);
+        topoCtx.fillStyle = 'rgba(0, 212, 255, 0.05)';
+        topoCtx.fill();
+
+        topoCtx.font = '16px serif';
+        topoCtx.textAlign = 'center';
+        topoCtx.textBaseline = 'middle';
+        topoCtx.fillText(n.icon, nx, ny);
+
+        topoCtx.font = '8px "Share Tech Mono"';
+        topoCtx.fillStyle = 'var(--dim)';
+        topoCtx.fillText(n.label, nx, ny + 25);
+      });
+
+      requestAnimationFrame(animateTopology);
+    }
+
     const N = 40;
     let delayData = Array.from({ length: N }, () => 10 + Math.random() * 8);
     let tputData = Array.from({ length: N }, () => 4 + Math.random() * 1.5);
     let lossData = Array.from({ length: N }, () => 0.05 + Math.random() * 0.15);
     let trafficData = Array.from({ length: N }, () => 50 + Math.random() * 30);
+    window.lastMetrics = null;
 
     // Standalone Mock Generator
     let phase = 0.0;
@@ -1902,14 +2019,27 @@
         const res = await fetch(`${BACKEND_URL}/api/status`);
         if (!res.ok) throw new Error("HTTP Request Failed");
         data = await res.json();
+        const statusEl = document.getElementById('sys-status');
+        if (statusEl) { statusEl.textContent = '● ONLINE'; statusEl.style.color = 'var(--green)'; }
       } catch (e) {
         // Fallback to standalone mode if backend is not running
         data = getMockState();
+        const statusEl = document.getElementById('sys-status');
+        if (statusEl) { statusEl.textContent = '● SIMULATED'; statusEl.style.color = 'var(--yellow)'; }
       }
 
       if (!data) return; // Prevention for null data parsing
+      window.lastMetrics = data;
 
       try {
+        // Update Topology UI
+        const elTx = document.getElementById('topo-tx');
+        if (elTx) elTx.textContent = (data.traffic.sent || (data.traffic.aggregate * 0.4)).toFixed(2);
+        const elRx = document.getElementById('topo-rx');
+        if (elRx) elRx.textContent = (data.traffic.recv || (data.traffic.aggregate * 0.6)).toFixed(2);
+        const elLoadDis = document.getElementById('topo-load-display');
+        if (elLoadDis) elLoadDis.textContent = 'LOAD: ' + data.traffic.aggregate.toFixed(1) + ' Mbps';
+
         // 1. Process alerts from backend + user actions (High Priority)
         let allAlerts = [...(data.alerts || []), ...pendingAlerts];
         pendingAlerts = []; // Clear queue after processing
@@ -2303,6 +2433,7 @@
 
     // Init polling
     window.addEventListener('load', () => {
+      initTopology();
       setInterval(fetchState, 2000);
       setInterval(fetchDataset, 4000);
       fetchState();
