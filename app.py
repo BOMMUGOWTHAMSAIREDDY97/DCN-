@@ -33,6 +33,14 @@ class NetworkState:
         self.on_vercel = os.environ.get('VERCEL', '') == '1'
         self.active_interface = "Vercel Cloud" if self.on_vercel else "Scanning..."
         
+        # Traffic Classification Map
+        self.traffic_map = {
+            "voip": ["zoom", "teams", "discord", "skype", "whatsapp", "slack"],
+            "http": ["chrome", "msedge", "firefox", "brave", "opera", "iexplore", "python"],
+            "ftp": ["filezilla", "winscp", "steam", "epicgameslauncher", "bittorrent", "utorrent", "idm"]
+        }
+
+        
         # Real Traffic Baseline
         self.capacity_mbps = 100.0
         self.current_load_mbps = 0.5 if self.on_vercel else 0.01 
