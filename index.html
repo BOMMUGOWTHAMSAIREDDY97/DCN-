@@ -33,7 +33,12 @@
     }
 
     body {
-      background: var(--bg);
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(ellipse at 50% -20%, rgba(10, 64, 96, 0.8) 0%, transparent 70%),
+        radial-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 25px 25px;
+      background-attachment: fixed;
       color: var(--text);
       font-family: 'Rajdhani', sans-serif;
       min-height: 100vh;
