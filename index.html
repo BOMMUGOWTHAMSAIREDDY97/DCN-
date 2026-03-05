@@ -40,15 +40,17 @@
       overflow-x: hidden;
     }
 
-    /* Animated grid background */
+    /* AI Generated cyber background */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background-image:
-        linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
-      background-size: 40px 40px;
+      background-image: url('/static/bg.png');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      opacity: 0.25;
+      /* Keep it dark enough for the cyber theme panels to stand out */
       pointer-events: none;
       z-index: 0;
     }
