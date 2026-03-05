@@ -40,19 +40,43 @@
       overflow-x: hidden;
     }
 
-    /* AI Generated cyber background */
+    /* Premium Animated Tech CSS Background */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background-image: url('/static/bg.png');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
-      opacity: 0.25;
-      /* Keep it dark enough for the cyber theme panels to stand out */
-      pointer-events: none;
+      background:
+        radial-gradient(ellipse at bottom, rgba(0, 212, 255, 0.1) 0%, transparent 60%),
+        radial-gradient(ellipse at top right, rgba(0, 255, 136, 0.05) 0%, transparent 50%);
+      background-color: var(--bg);
       z-index: 0;
+      pointer-events: none;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: -50%;
+      width: 200%;
+      height: 200%;
+      background-image:
+        linear-gradient(rgba(0, 212, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 255, 0.05) 1px, transparent 1px);
+      background-size: 50px 50px;
+      z-index: 0;
+      pointer-events: none;
+      transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
+      animation: gridMove 20s linear infinite;
+    }
+
+    @keyframes gridMove {
+      0% {
+        transform: perspective(500px) rotateX(60deg) translateY(0) translateZ(-200px);
+      }
+
+      100% {
+        transform: perspective(500px) rotateX(60deg) translateY(50px) translateZ(-200px);
+      }
     }
 
     header {
