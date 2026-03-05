@@ -13,8 +13,8 @@
   <script src="https://cdn.jsdelivr.net/gh/Leaflet/Leaflet.heat@gh-pages/dist/leaflet-heat.js"></script>
   <style>
     :root {
-      --bg: #030c12;
-      --panel: #061825;
+      --bg: #000;
+      --panel: rgba(6, 24, 37, 0.5);
       --border: #0a4060;
       --accent: #00d4ff;
       --green: #00ff88;
@@ -40,43 +40,19 @@
       overflow-x: hidden;
     }
 
-    /* Premium Animated Tech CSS Background */
+    /* AI Generated cyber background */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background:
-        radial-gradient(ellipse at bottom, rgba(0, 212, 255, 0.1) 0%, transparent 60%),
-        radial-gradient(ellipse at top right, rgba(0, 255, 136, 0.05) 0%, transparent 50%);
-      background-color: var(--bg);
-      z-index: 0;
+      background-image: url('/static/bg.png');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      opacity: 0.6;
+      /* Keep it dark enough for the cyber theme panels to stand out */
       pointer-events: none;
-    }
-
-    body::after {
-      content: '';
-      position: fixed;
-      inset: -50%;
-      width: 200%;
-      height: 200%;
-      background-image:
-        linear-gradient(rgba(0, 212, 255, 0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 212, 255, 0.05) 1px, transparent 1px);
-      background-size: 50px 50px;
       z-index: 0;
-      pointer-events: none;
-      transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
-      animation: gridMove 20s linear infinite;
-    }
-
-    @keyframes gridMove {
-      0% {
-        transform: perspective(500px) rotateX(60deg) translateY(0) translateZ(-200px);
-      }
-
-      100% {
-        transform: perspective(500px) rotateX(60deg) translateY(50px) translateZ(-200px);
-      }
     }
 
     header {
@@ -171,7 +147,7 @@
     #map-container {
       height: 100%;
       width: 100%;
-      background: #01080d;
+      background: rgba(1, 8, 13, 0.4);
       border: 1px solid var(--border);
       position: relative;
       z-index: 1;
@@ -184,7 +160,7 @@
       z-index: 1000;
       display: flex;
       gap: 10px;
-      background: rgba(3, 12, 18, 0.85);
+      background: rgba(3, 12, 18, 0.5);
       padding: 10px;
       border: 1px solid var(--accent);
       border-radius: 4px;
@@ -280,7 +256,7 @@
       bottom: 20px;
       right: 10px;
       z-index: 1000;
-      background: rgba(3, 12, 18, 0.88);
+      background: rgba(3, 12, 18, 0.5);
       border: 1px solid var(--border);
       border-radius: 4px;
       padding: 10px 14px;
@@ -506,7 +482,7 @@
 
     /* ML Predictor */
     .ml-panel {
-      background: linear-gradient(135deg, #041520, #061c10);
+      background: linear-gradient(135deg, rgba(4, 21, 32, 0.6), rgba(6, 28, 16, 0.6));
       border: 1px solid #0a5030;
       padding: 20px;
       position: relative;
@@ -603,7 +579,7 @@
 
     /* QoS Controller */
     .qos-panel {
-      background: linear-gradient(135deg, #041520, #071025);
+      background: linear-gradient(135deg, rgba(4, 21, 32, 0.6), rgba(7, 16, 37, 0.6));
       border: 1px solid #082040;
       padding: 20px;
       position: relative;
@@ -1468,7 +1444,7 @@
         <div class="t-icon">🌐</div> Global Network Traffic Map
       </div>
       <div
-        style="flex: 1; margin: 15px 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: #000; position: relative;">
+        style="flex: 1; margin: 15px 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: rgba(0, 0, 0, 0.4); position: relative;">
         <div class="map-overlay">
           <input type="text" id="map-search-input" class="map-input" placeholder="ENTER LOCATION AREA...">
           <button class="map-btn" onclick="searchLocation()">TARGET</button>
@@ -1568,7 +1544,8 @@
         </div>
 
         <table id="dataset-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
-          <thead style="position: sticky; top: 0; background: #030d16; z-index: 10;">
+          <thead
+            style="position: sticky; top: 0; background: rgba(3, 13, 22, 0.7); backdrop-filter: blur(5px); z-index: 10;">
             <tr>
               <th onclick="sortDataset('timestamp')"
                 style="padding: 11px 14px; border-bottom: 2px solid var(--accent); color: var(--accent); font-size:0.7rem; letter-spacing:1.5px; white-space:nowrap; cursor:pointer; user-select:none;">
