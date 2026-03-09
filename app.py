@@ -33,14 +33,6 @@ class NetworkState:
         self.on_vercel = os.environ.get('VERCEL', '') == '1'
         self.active_interface = "Vercel Cloud" if self.on_vercel else "Scanning..."
         
-        # Traffic Classification Map
-        self.traffic_map = {
-            "voip": ["zoom", "teams", "discord", "skype", "whatsapp", "slack"],
-            "http": ["chrome", "msedge", "firefox", "brave", "opera", "iexplore", "python"],
-            "ftp": ["filezilla", "winscp", "steam", "epicgameslauncher", "bittorrent", "utorrent", "idm"]
-        }
-
-        
         # Real Traffic Baseline
         self.capacity_mbps = 100.0
         self.current_load_mbps = 0.5 if self.on_vercel else 0.01 
@@ -302,46 +294,53 @@ class NetworkState:
                 infer_time = round((time.perf_counter() - start_time) * 1000, 2)
     
                 # 4. Adaptive QoS Controller (Resource Allocation)
+                # Logic derived from ML-Driven Adaptive QoS script
                 if state == "low":
-                    # Normal allocation
-                    bw_voip, bw_http, bw_ftp = 20, 50, 30
-                    # Priorities 1, 2, 3 normal
+                    # More balanced priorities (5, 4, 3)
+                    bw_voip, bw_http, bw_ftp = 25, 45, 30
                     q_voip, q_http, q_ftp = 10, 30, 60
                 elif state == "med":
-                    # Protect VoIP and HTTP slightly
-                    bw_voip, bw_http, bw_ftp = 30, 45, 25
+                    # Moderate VoIP preference (6, 3, 2)
+                    bw_voip, bw_http, bw_ftp = 40, 35, 25
                     q_voip, q_http, q_ftp = 20, 40, 40
-                    # Apply FTP Priority Logic
-                    if self.config['ftp_prio'] == "high": bw_ftp += 10; bw_http -= 10; q_ftp -= 10; q_http += 10
-                    if self.config['ftp_prio'] == "low": bw_ftp -= 10; bw_http += 10; q_ftp += 10; q_http -= 10
+                    # Apply FTP Priority Logic from User Config
+                    if self.config['ftp_prio'] == "high": bw_ftp += 10; bw_http -= 10
+                    if self.config['ftp_prio'] == "low": bw_ftp -= 10; bw_http += 10
                 else:
-                    # High congestion: Heavily prioritize VoIP based on config
-                    bw_voip = self.config['voip_alloc']
+                    # Strong VoIP protection (8, 2, 1)
+                    bw_voip = max(60, self.config['voip_alloc'])
                     rem = 100 - bw_voip
                     bw_http = int(rem * 0.7)
                     bw_ftp = rem - bw_http
-                    
-                    # Queue occupancy shifted to protect VoIP
                     q_voip, q_http, q_ftp = 50, 30, 20
-                    if self.config['ftp_prio'] == "high": q_ftp -= 10; q_http += 10
     
-                # 5. Bottleneck Router / Performance Analyzer
+                # 5. Performance Comparison Engine (Adaptive vs FIFO)
                 link_utilization = min(100, int(utilization_ratio * 100))
                 queue_occupancy = min(100, int((queue_length / 500.0) * 100))
                 
-                # Post-QoS Performance Metrics
+                # Baseline (FIFO) metrics
+                fifo_delay = base_delay
+                fifo_loss = 0.05 + (utilization_ratio ** 2) * 10.0 if utilization_ratio > 0.4 else 0.01
+                fifo_tput = total_load * (1.0 - fifo_loss/100.0)
+
+                # ML-Adaptive metrics
                 if state == "high":
-                    # QoS is acting to save VoIP but overall delay is high, loss happens mainly on FTP
-                    final_delay = base_delay * 0.8  # QoS managed it slightly better than raw
-                    packet_loss = 0.5 + (utilization_ratio - 0.75) * 5.0
+                    # Improved protection saves time-sensitive traffic (VoIP)
+                    final_delay = base_delay * 0.75  
+                    packet_loss = fifo_loss * 0.6
                 elif state == "med":
-                    final_delay = base_delay * 0.9
-                    packet_loss = 0.1
+                    final_delay = base_delay * 0.85
+                    packet_loss = fifo_loss * 0.4
                 else:
-                    final_delay = base_delay
-                    packet_loss = 0.02
+                    final_delay = base_delay * 0.95
+                    packet_loss = fifo_loss * 0.2
                     
                 final_tput = total_load * (1.0 - packet_loss/100.0)
+
+                # Calculate Improvements (%)
+                improvement_delay = max(0, ((fifo_delay - final_delay) / fifo_delay) * 100)
+                improvement_loss = max(0, ((fifo_loss - packet_loss) / max(0.01, fifo_loss)) * 100)
+                improvement_tput = max(0, ((final_tput - fifo_tput) / max(0.01, fifo_tput)) * 100)
     
                 # Generate Alerts based on actual state transitions or thresholds
                 alerts = []
@@ -418,7 +417,12 @@ class NetworkState:
                     "performance": {
                         "delay": round(final_delay, 1),
                         "throughput": round(final_tput, 2),
-                        "packet_loss": round(packet_loss, 2)
+                        "packet_loss": round(packet_loss, 2),
+                        "fifo_delay": round(fifo_delay, 1),
+                        "fifo_loss": round(fifo_loss, 2),
+                        "improvement_delay": round(improvement_delay, 1),
+                        "improvement_loss": round(improvement_loss, 1),
+                        "improvement_tput": round(improvement_tput, 1)
                     },
                     "alerts": alerts
                 }

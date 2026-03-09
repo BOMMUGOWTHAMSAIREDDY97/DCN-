@@ -658,53 +658,89 @@
     }
 
     /* Performance Panel */
-    .perf-panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      padding: 20px;
+    /* Optimization Panel */
+    .opt-panel {
+      background: linear-gradient(135deg, #061c10, #041520);
+      border: 1px solid #00ff88;
+      padding: 15px;
+      margin-top: 15px;
       position: relative;
     }
 
-    .perf-panel::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--yellow), transparent);
+    .opt-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.6rem;
+      color: var(--green);
+      margin-bottom: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
     }
 
-    .perf-metrics {
+    .opt-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 12px;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
     }
 
-    .perf-box {
-      border: 1px solid var(--border);
-      padding: 12px;
+    .opt-stat {
+      background: rgba(0, 255, 136, 0.05);
+      border: 1px solid rgba(0, 255, 136, 0.2);
+      padding: 8px;
       text-align: center;
     }
 
-    .perf-icon {
-      font-size: 1.4rem;
-      margin-bottom: 6px;
-    }
-
-    .perf-val {
-      font-family: 'Orbitron', monospace;
-      font-size: 1.2rem;
-      font-weight: 700;
+    .opt-val {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1.1rem;
+      color: var(--green);
       display: block;
-      margin-bottom: 4px;
     }
 
-    .perf-label {
-      font-size: 0.7rem;
+    .opt-label {
+      font-size: 0.6rem;
       color: var(--dim);
       text-transform: uppercase;
-      letter-spacing: 1px;
+    }
+
+    /* Comparison Bar Chart */
+    .comp-bar-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .comp-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .comp-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+    }
+
+    .comp-bar-bg {
+      height: 8px;
+      background: rgba(10, 64, 96, 0.3);
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .comp-fill-ml {
+      height: 100%;
+      background: var(--green);
+      transition: width 0.5s;
+    }
+
+    .comp-fill-fifo {
+      height: 100%;
+      background: var(--red);
+      opacity: 0.4;
+      transition: width 0.5s;
     }
 
     /* Mini chart canvas */
@@ -1333,6 +1369,7 @@
 
       <div class="connector">▼</div>
 
+      <!-- Data Metrics Panel Combined -->
       <!-- Performance Analyzer -->
       <div class="perf-panel">
         <div class="panel-title" style="color:var(--yellow);">◉ Performance Analyzer</div>
@@ -1354,6 +1391,44 @@
           </div>
         </div>
       </div>
+      
+      <!-- Optimization Insights (New) -->
+      <div class="opt-panel">
+        <div class="opt-title">ML Optimization Analysis</div>
+        <div class="opt-grid">
+          <div class="opt-stat">
+            <span class="opt-val" id="opt-delay-red">-0.0%</span>
+            <span class="opt-label">Delay reduction</span>
+          </div>
+          <div class="opt-stat">
+            <span class="opt-val" id="opt-tput-inc">+0.0%</span>
+            <span class="opt-label">T-put gain</span>
+          </div>
+        </div>
+        <div class="comp-bar-container">
+          <div class="comp-row">
+            <div class="comp-labels">
+              <span class="opt-label">Adaptive vs FIFO Delay</span>
+              <span class="opt-label" id="comp-delay-label">-- ms / -- ms</span>
+            </div>
+            <div class="comp-bar-bg">
+              <div id="comp-delay-ml" style="width: 50%;" class="comp-fill-ml"></div>
+              <div id="comp-delay-fifo" style="width: 50%;" class="comp-fill-fifo"></div>
+            </div>
+          </div>
+          <div class="comp-row">
+            <div class="comp-labels">
+              <span class="opt-label">Adaptive vs FIFO Loss</span>
+              <span class="opt-label" id="comp-loss-label">--% / --%</span>
+            </div>
+            <div class="comp-bar-bg">
+              <div id="comp-loss-ml" style="width: 20%;" class="comp-fill-ml"></div>
+              <div id="comp-loss-fifo" style="width: 80%;" class="comp-fill-fifo"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- Right Column -->
@@ -2100,7 +2175,11 @@
         ml: { state: "low", confidence: 99.1, infer_time: 8 },
         qos: { bandwidth: { voip: 20, http: 50, ftp: 30 }, queues: { voip: 10, http: 30, ftp: 60 } },
         router: { link_utilization: Math.floor(total_load), queue_occupancy: 40 },
-        performance: { delay: 12.5, throughput: 4.8, packet_loss: 0.12 }
+        performance: { 
+          delay: 12.5, throughput: 4.8, packet_loss: 0.12,
+          fifo_delay: 14.8, fifo_loss: 0.45,
+          improvement_delay: 15.5, improvement_loss: 73.3, improvement_tput: 8.5
+        }
       };
     }
 
@@ -2200,6 +2279,36 @@
         if (elPerfTput) elPerfTput.textContent = data.performance.throughput.toFixed(2) + ' Gbps';
         const elPerfLoss = document.getElementById('perf-loss');
         if (elPerfLoss) elPerfLoss.textContent = data.performance.packet_loss.toFixed(2) + '%';
+        
+        // 3b. Optimization Inights
+        const pLoss = data.performance.packet_loss;
+        const fLoss = data.performance.fifo_loss || (pLoss * 1.5);
+        const pDelay = data.performance.delay;
+        const fDelay = data.performance.fifo_delay || (pDelay * 1.2);
+
+        const elOptDelay = document.getElementById('opt-delay-red');
+        if (elOptDelay) elOptDelay.textContent = '-' + (data.performance.improvement_delay || 0.0).toFixed(1) + '%';
+        const elOptTput = document.getElementById('opt-tput-inc');
+        if (elOptTput) elOptTput.textContent = '+' + (data.performance.improvement_tput || 0.0).toFixed(1) + '%';
+
+        const elCompDelayLbl = document.getElementById('comp-delay-label');
+        if (elCompDelayLbl) elCompDelayLbl.textContent = `${pDelay.toFixed(1)} ms / ${fDelay.toFixed(1)} ms`;
+        const elCompLossLbl = document.getElementById('comp-loss-label');
+        if (elCompLossLbl) elCompLossLbl.textContent = `${pLoss.toFixed(2)}% / ${fLoss.toFixed(2)}%`;
+
+        // Bar scaling
+        const maxDelay = Math.max(pDelay, fDelay, 1);
+        const elCompDelayMl = document.getElementById('comp-delay-ml');
+        if (elCompDelayMl) elCompDelayMl.style.width = ((pDelay / maxDelay) * 100) + '%';
+        const elCompDelayFifo = document.getElementById('comp-delay-fifo');
+        if (elCompDelayFifo) elCompDelayFifo.style.width = ((fDelay / maxDelay) * 100) + '%';
+
+        const maxLoss = Math.max(pLoss, fLoss, 0.1);
+        const elCompLossMl = document.getElementById('comp-loss-ml');
+        if (elCompLossMl) elCompLossMl.style.width = ((pLoss / maxLoss) * 100) + '%';
+        const elCompLossFifo = document.getElementById('comp-loss-fifo');
+        if (elCompLossFifo) elCompLossFifo.style.width = ((fLoss / maxLoss) * 100) + '%';
+
 
         // 4. Traffic Sources
         const elTVoipVal = document.getElementById('t-voip-val');
