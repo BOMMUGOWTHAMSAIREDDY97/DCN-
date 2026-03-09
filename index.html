@@ -658,6 +658,55 @@
     }
 
     /* Performance Panel */
+    .perf-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 20px;
+      position: relative;
+    }
+
+    .perf-panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--yellow), transparent);
+    }
+
+    .perf-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+
+    .perf-box {
+      border: 1px solid var(--border);
+      padding: 12px;
+      text-align: center;
+    }
+
+    .perf-icon {
+      font-size: 1.4rem;
+      margin-bottom: 6px;
+    }
+
+    .perf-val {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.2rem;
+      font-weight: 700;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .perf-label {
+      font-size: 0.7rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
     /* Optimization Panel */
     .opt-panel {
       background: linear-gradient(135deg, #061c10, #041520);
