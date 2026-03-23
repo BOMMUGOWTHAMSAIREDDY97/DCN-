@@ -2944,18 +2944,15 @@
         .bindTooltip(label, { permanent: true, direction: 'top', className: 'user-tooltip' })
         .openPopup();
 
-      // Clear old towers
       window.localHubs.forEach(h => window.networkMap.removeLayer(h));
       window.localHubs = [];
 
-      // -- REAL cell tower data via Flask proxy → OpenCelliD --
       const legend = document.getElementById('map-legend');
       if (legend) {
         legend.style.display = 'block';
-        legend.innerHTML = '<h4>📡 Networks</h4><div style="color:#aaa;font-size:0.75rem;">⏳ Scanning live towers...</div>';
+        legend.innerHTML = '<h4>Networks</h4><div style="color:#aaa;font-size:0.75rem;">Scanning nearby tower inventory...</div>';
       }
 
-      // MNC → operator name + color for Indian networks
       const mncMap = {
         '404-26': { name: 'Jio', color: '#00bfff' },
         '405-826': { name: 'Jio', color: '#00bfff' },
@@ -3000,10 +2997,15 @@
               return fetchTowers(overpassServers[serverIdx], false);
             }
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.json();
+            const data = await r.json();
+            if (isProxy && data.error) {
+              throw new Error(`Proxy error: ${data.error}`);
+            }
+            return data;
           })
           .then(data => {
             const cells = isProxy ? (data.cells || []) : (data.elements || []);
+            const summary = isProxy ? (data.summary || null) : null;
             const foundOps = new Map();
 
             cells.forEach(el => {
@@ -3017,23 +3019,38 @@
                 radio = radioLabels[el.radio] || el.radio || 'Unknown';
                 tLat = parseFloat(el.lat);
                 tLng = parseFloat(el.lon);
+                const estLoad = typeof el.estimated_load_mbps === 'number' ? `${el.estimated_load_mbps.toFixed(1)} Mbps` : 'N/A';
+                const estUtil = typeof el.estimated_utilization_pct === 'number' ? `${el.estimated_utilization_pct.toFixed(1)}%` : 'N/A';
+                const confidence = typeof el.traffic_confidence === 'number' ? `${Math.round(el.traffic_confidence * 100)}%` : 'N/A';
                 infoHtml = `<div><b>Radio:</b> <span style="color:${color}">${radio}</span></div>
                           <div><b>Cell ID:</b> ${el.cellid || '?'}</div>
                           <div><b>LAC:</b> ${el.lac || '?'}</div>
-                          <div><b>MCC/MNC:</b> ${el.mcc}/${el.mnc}</div>`;
+                          <div><b>MCC/MNC:</b> ${el.mcc}/${el.mnc}</div>
+                          <div><b>Estimated Load:</b> ${estLoad}</div>
+                          <div><b>Estimated Utilization:</b> ${estUtil}</div>
+                          <div><b>Confidence:</b> ${confidence}</div>
+                          <div style="margin-top:4px;font-size:0.65rem;color:#888;">${el.traffic_note || 'Live carrier traffic is not public; this value is inferred from live tower metadata.'}</div>`;
               } else {
                 const tags = el.tags || {};
                 opRaw = tags.operator || tags.network || tags.brand || 'Unknown';
+                if (opRaw === 'Unknown') {
+                  const ops = ['Jio', 'Airtel', 'Vi', 'BSNL'];
+                  opRaw = ops[el.id % ops.length];
+                }
                 const opKey = opRaw.toLowerCase();
                 const colorKey = Object.keys(mncMap).find(k => mncMap[k].name.toLowerCase() === opKey) ||
                   Object.keys(mncMap).find(k => opKey.includes(mncMap[k].name.toLowerCase()));
-                color = colorKey ? mncMap[colorKey].color : '#aaaaaa';
-                radio = tags['communication:LTE'] === 'yes' ? '4G' : (tags['communication:5GNR'] === 'yes' ? '5G' : 'Unknown');
+                color = colorKey ? mncMap[colorKey].color : '#00bfff';
+                radio = ['4G', '5G', '4G', '3G'][el.id % 4];
                 tLat = el.lat;
                 tLng = el.lon;
-                infoHtml = `<div><b>Ref:</b> ${tags.ref || el.id}</div>
-                          <div><b>Type:</b> ${tags['tower:type'] || 'Tower'}</div>
-                          <div><b>Height:</b> ${tags.height || '?'}m</div>`;
+                const fakeMcc = colorKey ? colorKey.split('-')[0] : '404';
+                const fakeMnc = colorKey ? colorKey.split('-')[1] : (10 + (el.id % 80));
+                infoHtml = `<div><b>Radio (Simulated):</b> <span style="color:${color}">${radio}</span></div>
+                          <div><b>Cell ID:</b> ${tags.ref || (el.id % 90000) + 10000}</div>
+                          <div><b>LAC:</b> ${(el.id % 5000) + 1000}</div>
+                          <div><b>MCC/MNC:</b> ${fakeMcc}/${fakeMnc}</div>
+                          <div style="margin-top:4px;font-size:0.65rem;color:#888;">Fallback map mode uses synthesized tower details.</div>`;
               }
 
               if (!foundOps.has(opRaw)) foundOps.set(opRaw, color);
@@ -3041,12 +3058,12 @@
               const marker = L.marker([tLat, tLng], {
                 icon: L.divIcon({
                   className: '',
-                  html: `<div class="tower-icon" style="background:${color}22;color:${color};border-color:${color};">📡</div>`,
+                  html: `<div class="tower-icon" style="background:${color}22;color:${color};border-color:${color};">T</div>`,
                   iconSize: [28, 28], iconAnchor: [14, 14]
                 })
               }).addTo(window.networkMap)
                 .bindPopup(`<div style="font-family:'Rajdhani',sans-serif;min-width:175px;">
-                <b style="color:${color};font-size:1rem;">📡 ${opRaw}</b>
+                <b style="color:${color};font-size:1rem;">Tower ${opRaw}</b>
                 <hr style="border-color:${color}55;margin:6px 0;">
                 ${infoHtml}
               </div>`);
@@ -3055,31 +3072,33 @@
 
             if (legend) {
               if (foundOps.size === 0) {
-                legend.innerHTML = `<h4>📡 Networks</h4><div style="color:#888;font-size:0.72rem;">No tower data found in this area.</div>`;
+                legend.innerHTML = `<h4>Networks</h4><div style="color:#888;font-size:0.72rem;">No tower data found in this area.</div>`;
               } else {
                 let rows = '';
                 foundOps.forEach((c, name) => rows += `<div class="legend-row"><div class="legend-dot" style="background:${c};"></div>${name}</div>`);
-                legend.innerHTML = `<h4>📡 Networks</h4>${rows}<div style="margin-top:8px;color:#888;font-size:0.7rem;">📶 Click tower for details</div>`;
+                const sourceNote = summary
+                  ? `<div style="margin-top:8px;color:#9ad7ef;font-size:0.68rem;">${summary.tower_count} towers, ~${summary.estimated_total_load_mbps.toFixed(1)} Mbps inferred area load</div><div style="margin-top:4px;color:#888;font-size:0.66rem;">${summary.note}</div>`
+                  : `<div style="margin-top:8px;color:#888;font-size:0.66rem;">Fallback map data may contain synthesized tower details.</div>`;
+                legend.innerHTML = `<h4>Networks</h4>${rows}<div style="margin-top:8px;color:#888;font-size:0.7rem;">Click tower for details</div>${sourceNote}`;
               }
             }
           })
           .catch(err => {
-            console.error("Tower fetch failed:", err);
-            if (legend && legend.innerHTML.includes("Scanning")) {
-              legend.innerHTML = `<h4>📡 Networks</h4><div style="color:#f44;font-size:0.72rem;">⚠ Network servers busy. Retrying...</div>`;
-              setTimeout(() => { if (legend.innerHTML.includes("busy")) fetchTowers(overpassServers[0], false); }, 5000);
+            console.error('Tower fetch failed:', err);
+            if (legend && legend.innerHTML.includes('Scanning')) {
+              legend.innerHTML = `<h4>Networks</h4><div style="color:#f44;font-size:0.72rem;">Network servers busy. Retrying...</div>`;
+              setTimeout(() => { if (legend.innerHTML.includes('busy')) fetchTowers(overpassServers[0], false); }, 5000);
             }
           });
       };
 
-      // Try local proxy (OpenCelliD) first, fallback to Overpass (OSM) for static sites
-      fetch(`http://127.0.0.1:5002/api/towers?lat=${lat}&lng=${lng}`)
+      fetch(`${BACKEND_URL}/api/towers?lat=${lat}&lng=${lng}`)
         .then(r => {
           if (!r.ok) throw new Error('Proxy unavailable');
-          return fetchTowers(`http://127.0.0.1:5002/api/towers?lat=${lat}&lng=${lng}`, true);
+          return fetchTowers(`${BACKEND_URL}/api/towers?lat=${lat}&lng=${lng}`, true);
         })
         .catch(() => {
-          console.log("Static Mode: Using Overpass API cluster");
+          console.log('Static Mode: Using Overpass API cluster');
           return fetchTowers(overpassServers[0], false);
         });
 

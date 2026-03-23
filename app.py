@@ -17,6 +17,70 @@ load_dotenv()  # Load environment variables before initializing classes
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+RADIO_CAPACITY_MBPS = {
+    "GSM": 0.2,
+    "CDMA": 3.1,
+    "UMTS": 42.0,
+    "LTE": 150.0,
+    "NR": 600.0
+}
+
+
+def clamp(value, lower, upper):
+    return max(lower, min(upper, value))
+
+
+def estimate_tower_traffic(cell, nearby_count):
+    """
+    OpenCelliD exposes real tower inventory and radio metadata, but not live
+    carrier utilization. We derive a tower-aware load estimate from the live
+    tower record and return explicit confidence + provenance for the UI.
+    """
+    radio = str(cell.get('radio') or 'UNKNOWN').upper()
+    capacity_mbps = RADIO_CAPACITY_MBPS.get(radio, 50.0)
+    samples = max(0.0, float(cell.get('samples') or 0))
+    avg_signal = float(cell.get('averageSignal') or cell.get('avgSignal') or -95)
+    cell_range_m = max(50.0, float(cell.get('range') or 500))
+
+    sample_factor = clamp(math.log10(samples + 1) / 2.4 if samples else 0.0, 0.0, 1.0)
+    signal_factor = clamp((avg_signal + 120.0) / 70.0, 0.15, 1.0)
+    density_factor = clamp(nearby_count / 12.0, 0.2, 1.0)
+    overlap_factor = clamp(1.0 - (cell_range_m / 4000.0), 0.1, 1.0)
+
+    utilization_pct = clamp(
+        8.0
+        + (sample_factor * 38.0)
+        + (signal_factor * 18.0)
+        + (density_factor * 24.0)
+        + (overlap_factor * 10.0),
+        5.0,
+        92.0
+    )
+
+    estimated_load_mbps = round(capacity_mbps * (utilization_pct / 100.0), 2)
+    confidence = round(
+        clamp(
+            0.35
+            + (0.25 if samples > 0 else 0.0)
+            + (0.15 if cell.get('range') else 0.0)
+            + (0.10 if cell.get('averageSignal') or cell.get('avgSignal') else 0.0)
+            + (0.05 if radio in RADIO_CAPACITY_MBPS else 0.0),
+            0.35,
+            0.90
+        ),
+        2
+    )
+
+    return {
+        "radio_generation": radio,
+        "estimated_load_mbps": estimated_load_mbps,
+        "estimated_utilization_pct": round(utilization_pct, 1),
+        "capacity_mbps": capacity_mbps,
+        "traffic_confidence": confidence,
+        "traffic_note": "Live carrier tower utilization is not public in OpenCelliD; load is inferred from real tower metadata."
+    }
+
+
 # Simulation State
 class NetworkState:
     def __init__(self):
@@ -445,13 +509,20 @@ def get_status():
 
 @app.route('/api/towers', methods=['GET'])
 def get_towers():
-    """Proxy OpenCelliD so browser avoids CORS."""
+    """Return real OpenCelliD towers plus clearly labeled inferred load metrics."""
     lat  = flask_request.args.get('lat', type=float)
     lng  = flask_request.args.get('lng', type=float)
     if lat is None or lng is None:
         return jsonify({'error': 'lat and lng required'}), 400
 
-    OCID_KEY = 'pk.67c74360612eba39b08f928817786da9'
+    OCID_KEY = os.environ.get('OPENCELLID_API_KEY')
+    if not OCID_KEY:
+        return jsonify({
+            'error': 'OPENCELLID_API_KEY is not configured',
+            'cells': [],
+            'real_traffic_available': False
+        }), 503
+
     delta    = 0.008         # ~800m radius (safely under 4,000,000 sq. mts limit)
     bbox     = f"{lat-delta},{lng-delta},{lat+delta},{lng+delta}"
     url      = f"https://opencellid.org/cell/getInArea?key={OCID_KEY}&BBOX={bbox}&format=json&limit=500"
@@ -459,7 +530,38 @@ def get_towers():
     try:
         resp = req_lib.get(url, timeout=15)
         resp.raise_for_status()
-        return jsonify(resp.json())
+        data = resp.json()
+        if 'error' in data:
+            return jsonify({'error': data['error'], 'cells': []}), 401
+
+        raw_cells = data.get('cells', []) or []
+        nearby_count = len(raw_cells)
+        enriched_cells = []
+        total_estimated_load = 0.0
+
+        for cell in raw_cells:
+            enriched_cell = dict(cell)
+            traffic = estimate_tower_traffic(enriched_cell, nearby_count)
+            enriched_cell.update(traffic)
+            total_estimated_load += traffic['estimated_load_mbps']
+            enriched_cells.append(enriched_cell)
+
+        avg_utilization = round(
+            sum(cell['estimated_utilization_pct'] for cell in enriched_cells) / max(1, len(enriched_cells)),
+            1
+        )
+
+        data['cells'] = enriched_cells
+        data['source'] = 'OpenCelliD'
+        data['real_traffic_available'] = False
+        data['traffic_mode'] = 'inferred_from_live_tower_inventory'
+        data['summary'] = {
+            'tower_count': nearby_count,
+            'estimated_total_load_mbps': round(total_estimated_load, 2),
+            'average_utilization_pct': avg_utilization,
+            'note': 'Tower records are live from OpenCelliD. Traffic values are inferred because public carrier APIs do not expose real per-tower utilization.'
+        }
+        return jsonify(data)
     except Exception as e:
         return jsonify({'error': str(e), 'cells': []}), 502
 
