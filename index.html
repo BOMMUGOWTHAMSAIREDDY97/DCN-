@@ -2009,16 +2009,24 @@
       std: '#3a6a80'    // Dim Blue
     };
 
+    function getProcessCategory(p) {
+      const name = (p || '').toLowerCase();
+      if (name.includes('voip') || name.includes('audio') || name.includes('call') || name.includes('phone')) return 'voip';
+      if (name.includes('http') || name.includes('web') || name.includes('browser') || name.includes('chrome') || name.includes('edge')) return 'http';
+      if (name.includes('ftp') || name.includes('file') || name.includes('download') || name.includes('transfer')) return 'ftp';
+      return 'std';
+    }
+
     function initTopology() {
       if (!topoCanvas) return;
       topoCtx = topoCanvas.getContext('2d');
       // DCN Pipeline: Sources -> Access -> Controller -> Core -> Gateway
       topoNodes = [
-        { id: 'src', label: 'TRAFFIC SOURCES', x: 0.1, y: 0.5, icon: '⚯', type: 'base' },
-        { id: 'acc', label: 'ACCESS SW', x: 0.3, y: 0.5, icon: '⬢', type: 'base' },
-        { id: 'ml', label: 'ML QoS CTRL', x: 0.5, y: 0.5, icon: '⚡', type: 'core' },
-        { id: 'core', label: 'CORE ROUTER', x: 0.7, y: 0.5, icon: '▣', type: 'base' },
-        { id: 'gw', label: 'INTERNET GW', x: 0.9, y: 0.5, icon: '☁', type: 'target' }
+        { id: 'src', label: 'TRAFFIC SOURCES', x: 0.1, y: 0.5, icon: '⚯', type: 'base', size: 20 },
+        { id: 'acc', label: 'ACCESS SW', x: 0.3, y: 0.5, icon: '⬢', type: 'base', size: 20 },
+        { id: 'ml', label: 'ML QoS CTRL', x: 0.5, y: 0.5, icon: '⚡', type: 'core', size: 24 },
+        { id: 'core', label: 'CORE ROUTER', x: 0.7, y: 0.5, icon: '▣', type: 'base', size: 20 },
+        { id: 'gw', label: 'INTERNET GW', x: 0.9, y: 0.5, icon: '☁', type: 'target', size: 20 }
       ];
       animateTopology();
     }
@@ -2057,8 +2065,8 @@
         node.y += (node.targetY - node.y) * 0.05;
       });
 
-      const core = topoNodes.find(n => n.id === 'controller');
-      const gw = topoNodes.find(n => n.id === 'gateway');
+      const core = topoNodes.find(n => n.id === 'ml');
+      const gw = topoNodes.find(n => n.id === 'gw');
 
       // 2. Draw Connections (Links)
       topoCtx.setLineDash([5, 5]);
