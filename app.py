@@ -507,6 +507,52 @@ def get_status():
         state_manager._log_to_db()
     return jsonify(state_manager.get_current_metrics())
 
+
+@app.route('/api/cells', methods=['GET'])
+def get_cells():
+    """Return raw nearby OpenCelliD cells for a point/radius query."""
+    lat = flask_request.args.get('lat', type=float)
+    lon = flask_request.args.get('lon', type=float)
+    radius = flask_request.args.get('radius', default=3000, type=int)
+
+    if lat is None or lon is None:
+        return jsonify({'error': 'Missing required parameters: lat, lon'}), 400
+
+    if radius is None or radius <= 0:
+        return jsonify({'error': 'radius must be a positive integer'}), 400
+
+    api_key = os.environ.get('OPENCELLID_API_KEY')
+    if not api_key:
+        return jsonify({'error': 'API key not configured'}), 500
+
+    url = (
+        f"https://api.opencellid.org/cell/getInArea"
+        f"?key={api_key}&lat={lat}&lon={lon}&radius={radius}&format=json"
+    )
+
+    try:
+        response = req_lib.get(url, timeout=15)
+        if response.status_code != 200:
+            return jsonify({'error': 'OpenCelliD API error'}), response.status_code
+
+        data = response.json()
+        limited_cells = (data.get('cells') or [])[:300]
+
+        return (
+            jsonify({
+                'count': len(limited_cells),
+                'cells': limited_cells
+            }),
+            200,
+            {'Cache-Control': 's-maxage=60, stale-while-revalidate'}
+        )
+    except Exception as error:
+        return jsonify({
+            'error': 'Internal server error',
+            'details': str(error)
+        }), 500
+
+
 @app.route('/api/towers', methods=['GET'])
 def get_towers():
     """Return real OpenCelliD towers plus clearly labeled inferred load metrics."""
@@ -516,54 +562,64 @@ def get_towers():
         return jsonify({'error': 'lat and lng required'}), 400
 
     OCID_KEY = os.environ.get('OPENCELLID_API_KEY')
-    if not OCID_KEY:
-        return jsonify({
-            'error': 'OPENCELLID_API_KEY is not configured',
-            'cells': [],
-            'real_traffic_available': False
-        }), 503
-
-    delta    = 0.008         # ~800m radius (safely under 4,000,000 sq. mts limit)
-    bbox     = f"{lat-delta},{lng-delta},{lat+delta},{lng+delta}"
-    url      = f"https://opencellid.org/cell/getInArea?key={OCID_KEY}&BBOX={bbox}&format=json&limit=500"
-
-    try:
-        resp = req_lib.get(url, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        if 'error' in data:
-            return jsonify({'error': data['error'], 'cells': []}), 401
-
-        raw_cells = data.get('cells', []) or []
-        nearby_count = len(raw_cells)
-        enriched_cells = []
-        total_estimated_load = 0.0
-
-        for cell in raw_cells:
-            enriched_cell = dict(cell)
-            traffic = estimate_tower_traffic(enriched_cell, nearby_count)
-            enriched_cell.update(traffic)
-            total_estimated_load += traffic['estimated_load_mbps']
-            enriched_cells.append(enriched_cell)
-
-        avg_utilization = round(
-            sum(cell['estimated_utilization_pct'] for cell in enriched_cells) / max(1, len(enriched_cells)),
-            1
+    
+    # Try OpenCelliD if key is available
+    if OCID_KEY:
+        radius = 800           # 800m radius search around the point
+        url = (
+            f"https://api.opencellid.org/cell/getInArea"
+            f"?key={OCID_KEY}&lat={lat}&lon={lng}&radius={radius}&format=json"
         )
 
-        data['cells'] = enriched_cells
-        data['source'] = 'OpenCelliD'
-        data['real_traffic_available'] = False
-        data['traffic_mode'] = 'inferred_from_live_tower_inventory'
-        data['summary'] = {
-            'tower_count': nearby_count,
-            'estimated_total_load_mbps': round(total_estimated_load, 2),
-            'average_utilization_pct': avg_utilization,
-            'note': 'Tower records are live from OpenCelliD. Traffic values are inferred because public carrier APIs do not expose real per-tower utilization.'
-        }
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({'error': str(e), 'cells': []}), 502
+        try:
+            resp = req_lib.get(url, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            
+            # Check for API errors in response
+            if 'error' in data:
+                print(f"OpenCelliD API Error: {data['error']}")
+            else:
+                raw_cells = (data.get('cells') or [])[:500]
+                if raw_cells:  # Only return if we got data
+                    nearby_count = len(raw_cells)
+                    enriched_cells = []
+                    total_estimated_load = 0.0
+
+                    for cell in raw_cells:
+                        enriched_cell = dict(cell)
+                        traffic = estimate_tower_traffic(enriched_cell, nearby_count)
+                        enriched_cell.update(traffic)
+                        total_estimated_load += traffic['estimated_load_mbps']
+                        enriched_cells.append(enriched_cell)
+
+                    avg_utilization = round(
+                        sum(cell['estimated_utilization_pct'] for cell in enriched_cells) / max(1, len(enriched_cells)),
+                        1
+                    )
+
+                    data['cells'] = enriched_cells
+                    data['source'] = 'OpenCelliD'
+                    data['real_traffic_available'] = False
+                    data['traffic_mode'] = 'inferred_from_live_tower_inventory'
+                    data['summary'] = {
+                        'tower_count': nearby_count,
+                        'estimated_total_load_mbps': round(total_estimated_load, 2),
+                        'average_utilization_pct': avg_utilization,
+                        'note': 'Tower records are live from OpenCelliD. Traffic values are inferred because public carrier APIs do not expose real per-tower utilization.'
+                    }
+                    return jsonify(data)
+        except Exception as e:
+            print(f"OpenCelliD fetch error: {e}")
+    
+    # Fallback: return failure so the frontend will retry via Overpass API
+    print(f"OpenCelliD unavailable or no data. Frontend will use Overpass API fallback.")
+    return jsonify({
+        'error': 'Use Overpass API',
+        'cells': [],
+        'source': 'fallback',
+        'message': 'Frontend will query Overpass API directly'
+    }), 503
 
 
 @app.route('/')

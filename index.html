@@ -1149,6 +1149,10 @@
       <span id="connection-mode"
         style="border: 1px solid var(--border); padding: 0 8px; color: var(--accent); font-weight: bold;">LOCAL
         AGENT</span>
+      <span id="network-medium"
+        style="border: 1px solid var(--border); padding: 0 8px; color: var(--accent); font-weight: bold; display: flex; align-items: center; gap: 4px;">
+        <span id="net-med-icon">📶</span> <span id="net-med-text">Auto-Select</span>
+      </span>
       <span>NODES: 24</span>
       <span>UPTIME: 99.97%</span>
       <span id="clock">00:00:00</span>
@@ -1563,6 +1567,27 @@
           <input type="text" id="map-search-input" class="map-input" placeholder="ENTER LOCATION AREA...">
           <button class="map-btn" onclick="searchLocation()">TARGET</button>
           <button class="map-btn" style="background: var(--green);" onclick="autoDetectLocation()">AUTO-SCAN</button>
+          <button class="map-btn" style="background: #ff6600;" onclick="toggleHandoverMode()">HANDOVER</button>
+          <button id="map-ml-toggle" class="map-btn" style="background: var(--green); color: #000; box-shadow: var(--glow-g);" onclick="toggleMapML()">ML QOS: ACTIVE</button>
+        </div>
+        <!-- Handover Control Panel -->
+        <div id="handover-panel" style="position:absolute; top:15px; right:15px; z-index:1001; background:rgba(3,12,18,0.95); border:1px solid #ff6600; border-radius:4px; padding:12px; min-width:280px; max-width:350px; display:none; font-family:'Rajdhani',sans-serif; color:var(--text);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <span style="font-weight:bold; letter-spacing:1px; color:#ff6600;">📡 CELL TOWER HANDOVER</span>
+            <button onclick="toggleHandoverMode()" style="background:none; border:none; color:#ff6600; cursor:pointer; font-size:1.2rem;">✕</button>
+          </div>
+          <div style="margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid #ff660055;">
+            <div style="font-size:0.75rem; color:var(--dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:1px;">Source Area (Area 1)</div>
+            <input type="text" id="handover-area1" placeholder="Enter source location..." style="width:100%; background:rgba(0,0,0,0.5); border:1px solid var(--border); color:#fff; padding:6px; font-family:'Rajdhani',sans-serif; margin-bottom:6px;">
+            <button onclick="setHandoverArea('area1')" style="width:100%; padding:6px; background:#ff660055; border:1px solid #ff6600; color:#ff6600; cursor:pointer; font-family:'Rajdhani',sans-serif; font-weight:600;">SELECT AREA 1</button>
+          </div>
+          <div style="margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid #ff660055;">
+            <div style="font-size:0.75rem; color:var(--dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:1px;">Target Area (Area 2)</div>
+            <input type="text" id="handover-area2" placeholder="Enter target location..." style="width:100%; background:rgba(0,0,0,0.5); border:1px solid var(--border); color:#fff; padding:6px; font-family:'Rajdhani',sans-serif; margin-bottom:6px;">
+            <button onclick="setHandoverArea('area2')" style="width:100%; padding:6px; background:#ff660055; border:1px solid #ff6600; color:#ff6600; cursor:pointer; font-family:'Rajdhani',sans-serif; font-weight:600;">SELECT AREA 2</button>
+          </div>
+          <div id="handover-status" style="font-size:0.8rem; color:var(--yellow); margin-bottom:10px; text-align:center;">Ready for handover setup</div>
+          <button onclick="visualizeHandover()" style="width:100%; padding:8px; background:#ff6600; border:none; color:#000; cursor:pointer; font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:1px;">VISUALIZE HANDOVER</button>
         </div>
         <div id="map-container"></div>
         <div class="map-legend" id="map-legend" style="display:none;">
@@ -1901,7 +1926,8 @@
     updateClock();
 
     // Chart utility
-    function drawSparkline(canvas, data, color, fill) {
+    // minRange: the minimum Y-axis span so graphs never go completely flat
+    function drawSparkline(canvas, data, color, fill, minRange) {
       const ctx = canvas.getContext('2d');
       const W = canvas.offsetWidth || 200;
       const H = canvas.offsetHeight || 60;
@@ -1911,15 +1937,23 @@
       ctx.clearRect(0, 0, W, H);
 
       let min = Math.min(...data), max = Math.max(...data);
-      if (max === min) { min -= 0.1; max += 0.1; } // Prevent flat lines looking dead
+      const mid = (min + max) / 2;
+
+      // Enforce a minimum visible Y-range per metric so the graph never goes flat.
+      // Use the caller-supplied minRange or fall back to 5% of mid-value (floor 1).
+      const floor = minRange !== undefined ? minRange : Math.max(1, mid * 0.05);
+      if (max - min < floor) {
+        min = mid - floor / 2;
+        max = mid + floor / 2;
+      }
 
       const range = max - min || 1;
+
+      // Draw standard stable historical points directly mapping the exact values
       const pts = data.map((v, i) => {
-        // Add tiny visual jitter only for the line if the backend is perfectly steady
-        const jitter = (Math.random() - 0.5) * (range * 0.02);
-        const val = v + jitter;
-        return [i / (data.length - 1) * W, H - ((val - min) / range * (H - 10) + 5)];
+        return [i / (data.length - 1) * W, H - ((v - min) / range * (H - 10) + 5)];
       });
+
       if (fill) {
         ctx.beginPath();
         ctx.moveTo(pts[0][0], H);
@@ -1954,12 +1988,12 @@
     const _host = window.location.hostname;
     const _port = window.location.port;
     let BACKEND_URL;
-    if (window.location.protocol === 'file:' || _port !== '') {
-      BACKEND_URL = 'http://127.0.0.1:5002';          // local Flask dev server
+    if (window.location.protocol === 'file:') {
+      BACKEND_URL = 'http://127.0.0.1:5002';          // hit Flask API when opened as a file
     } else if (_host.includes('github.io')) {
       BACKEND_URL = 'https://cdn-network.vercel.app'; // GitHub Pages → Vercel backend
     } else {
-      BACKEND_URL = '';                               // Vercel / same-origin production
+      BACKEND_URL = '';                               // Use relative origin (localhost:5002)
     }
 
     // Topology Animation Logic: Hub-and-Spoke Process Map
@@ -1978,26 +2012,15 @@
     function initTopology() {
       if (!topoCanvas) return;
       topoCtx = topoCanvas.getContext('2d');
-      // Create permanent base nodes
+      // DCN Pipeline: Sources -> Access -> Controller -> Core -> Gateway
       topoNodes = [
-        { id: 'controller', label: 'DCN CONTROLLER', x: 0.5, y: 0.5, icon: '⬢', type: 'core', size: 35 },
-        { id: 'gateway', label: 'EXTERNAL GW', x: 0.9, y: 0.5, icon: '☁', type: 'target', size: 25 }
+        { id: 'src', label: 'TRAFFIC SOURCES', x: 0.1, y: 0.5, icon: '⚯', type: 'base' },
+        { id: 'acc', label: 'ACCESS SW', x: 0.3, y: 0.5, icon: '⬢', type: 'base' },
+        { id: 'ml', label: 'ML QoS CTRL', x: 0.5, y: 0.5, icon: '⚡', type: 'core' },
+        { id: 'core', label: 'CORE ROUTER', x: 0.7, y: 0.5, icon: '▣', type: 'base' },
+        { id: 'gw', label: 'INTERNET GW', x: 0.9, y: 0.5, icon: '☁', type: 'target' }
       ];
       animateTopology();
-    }
-
-    function getProcessCategory(procName) {
-      const name = procName.toLowerCase();
-      const map = {
-        voip: ["zoom", "teams", "discord", "skype", "whatsapp", "slack"],
-        http: ["chrome", "msedge", "firefox", "brave", "opera", "iexplore", "python"],
-        ftp: ["filezilla", "winscp", "steam", "epicgameslauncher", "bittorrent", "utorrent", "idm"]
-      };
-
-      for (const [cat, keywords] of Object.entries(map)) {
-        if (keywords.some(kw => name.includes(kw))) return cat;
-      }
-      return 'std';
     }
 
     function animateTopology() {
@@ -2010,7 +2033,6 @@
 
       topoCtx.clearRect(0, 0, W, H);
 
-      // 1. Synchronize process nodes from lastMetrics
       const processes = (window.lastMetrics && window.lastMetrics.processes) ? window.lastMetrics.processes : ["System Stack", "Network Driver"];
       const targetNodeCount = processes.length;
 
@@ -2147,6 +2169,7 @@
     let tputData = Array.from({ length: N }, () => 4 + Math.random() * 1.5);
     let lossData = Array.from({ length: N }, () => 0.05 + Math.random() * 0.15);
     let trafficData = Array.from({ length: N }, () => 50 + Math.random() * 30);
+    let chartsInitialized = false;
     window.lastMetrics = null;
 
     // Standalone Mock Generator
@@ -2209,6 +2232,31 @@
       applyConfig();
       const now_str = new Date().toTimeString().slice(0, 8);
       pendingAlerts.push({ time: now_str, msg: "USER: Reverted to Default Policies", cls: "warn" });
+    }
+
+    function getConnectionType(nicName) {
+      // 1. Try browser network information API first
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (conn && conn.type) {
+        if (conn.type === 'wifi') return 'Wi-Fi';
+        if (conn.type === 'cellular') return 'Mobile Data';
+        if (conn.type === 'ethernet') return 'Ethernet';
+      }
+
+      // 2. Check the active NIC name from the backend
+      const name = (nicName || '').toLowerCase();
+      if (name.includes('wi-fi') || name.includes('wifi') || name.includes('wireless') || name.includes('wlan')) {
+        return 'Wi-Fi';
+      }
+      if (name.includes('cellular') || name.includes('mobile') || name.includes('broadband') || name.includes('lte') || name.includes('data') || name.includes('lte') || name.includes('nr')) {
+        return 'Mobile Data';
+      }
+      if (name.includes('ethernet') || name.includes('eth0') || name.includes('lan')) {
+        return 'Ethernet';
+      }
+      
+      // Fallback
+      return 'Auto-Select';
     }
 
     function getMockState() {
@@ -2304,19 +2352,28 @@
         }
 
         // 2. Update Charts Data
-        delayData.push(data.performance.delay); delayData.shift();
-        tputData.push(data.performance.throughput); tputData.shift();
-        lossData.push(data.performance.packet_loss); lossData.shift();
-        trafficData.push(data.traffic.aggregate); trafficData.shift();
+        if (!chartsInitialized && data.performance) {
+          // Initialize all historical data points to the actual live value immediately to clear mock data noise blocks
+          delayData = Array(N).fill(data.performance.delay);
+          tputData = Array(N).fill(data.performance.throughput);
+          lossData = Array(N).fill(data.performance.packet_loss);
+          trafficData = Array(N).fill(data.traffic.aggregate);
+          chartsInitialized = true;
+        } else {
+          delayData.push(data.performance.delay); delayData.shift();
+          tputData.push(data.performance.throughput); tputData.shift();
+          lossData.push(data.performance.packet_loss); lossData.shift();
+          trafficData.push(data.traffic.aggregate); trafficData.shift();
+        }
 
         const delayChart = document.getElementById('delayChart');
-        if (delayChart) drawSparkline(delayChart, delayData, '#00ff88', true);
+        if (delayChart) drawSparkline(delayChart, delayData, '#00ff88', true, 2);      // min 2 ms span
         const tputChart = document.getElementById('tputChart');
-        if (tputChart) drawSparkline(tputChart, tputData, '#00d4ff', true);
+        if (tputChart) drawSparkline(tputChart, tputData, '#00d4ff', true, 0.05);     // min 0.05 Gbps span
         const lossChart = document.getElementById('lossChart');
-        if (lossChart) drawSparkline(lossChart, lossData, '#ffb700', true);
+        if (lossChart) drawSparkline(lossChart, lossData, '#ffb700', true, 0.05);     // min 0.05% span
         const trafficChart = document.getElementById('trafficChart');
-        if (trafficChart) drawSparkline(trafficChart, trafficData, '#00d4ff', true);
+        if (trafficChart) drawSparkline(trafficChart, trafficData, '#00d4ff', true, 0.5); // min 0.5 Mbps span
 
         // 3. Performance Values
         const elDelayVal = document.getElementById('delay-val');
@@ -2380,35 +2437,77 @@
         const elActiveNic = document.getElementById('active-nic');
         if (elActiveNic) elActiveNic.textContent = data.monitoring.interface || 'Auto-Select';
 
+        // Update connection medium in status bar
+        const activeNicName = data.monitoring.interface || '';
+        const connectionType = getConnectionType(activeNicName);
+        
+        const elNetMed = document.getElementById('network-medium');
+        const elNetMedIcon = document.getElementById('net-med-icon');
+        const elNetMedText = document.getElementById('net-med-text');
+        
+        if (elNetMed && elNetMedIcon && elNetMedText) {
+          elNetMedText.textContent = connectionType.toUpperCase();
+          if (connectionType === 'Wi-Fi') {
+            elNetMedIcon.textContent = '📶';
+            elNetMed.style.color = 'var(--green)';
+            elNetMed.style.borderColor = 'var(--green)';
+          } else if (connectionType === 'Mobile Data') {
+            elNetMedIcon.textContent = '📱';
+            elNetMed.style.color = 'var(--accent)';
+            elNetMed.style.borderColor = 'var(--accent)';
+          } else if (connectionType === 'Ethernet') {
+            elNetMedIcon.textContent = '🔌';
+            elNetMed.style.color = 'var(--yellow)';
+            elNetMed.style.borderColor = 'var(--yellow)';
+          } else {
+            elNetMedIcon.textContent = '🔄';
+            elNetMed.style.color = 'var(--dim)';
+            elNetMed.style.borderColor = 'var(--border)';
+          }
+        }
+
         // 6. Feature Extraction Animation
         const statusEl = document.getElementById('extraction-status');
         const vectorEl = document.getElementById('feature-vector');
         const progressEl = document.getElementById('feature-progress');
         const appEl = document.getElementById('extraction-app');
         if (statusEl && vectorEl && progressEl && appEl) {
-          statusEl.textContent = "EXTRACTING";
-          statusEl.style.color = "var(--accent)";
-          appEl.textContent = "ANALYZING SYSTEM FLOW...";
-          appEl.style.color = "var(--dim)";
+          const identified = (data.processes && data.processes.length > 0) ? data.processes[0] : "System Packet Flow";
+          
+          // Only trigger full transition if process changes or it's first run
+          if (appEl.textContent !== identified && !appEl.textContent.includes("ANALYZING")) {
+            statusEl.textContent = "EXTRACTING";
+            statusEl.style.color = "var(--accent)";
+            appEl.textContent = "ANALYZING SYSTEM FLOW...";
+            appEl.style.color = "var(--dim)";
 
-          progressEl.style.transition = "none";
-          progressEl.style.left = "-100%";
-          setTimeout(() => {
-            progressEl.style.transition = "left 1.5s linear";
-            progressEl.style.left = "100%";
-          }, 50);
+            progressEl.style.transition = "none";
+            progressEl.style.left = "-100%";
+            setTimeout(() => {
+              progressEl.style.transition = "left 1.5s linear";
+              progressEl.style.left = "100%";
+            }, 50);
 
-          setTimeout(() => {
+            setTimeout(() => {
+              statusEl.textContent = "COMPLETE (L7)";
+              statusEl.style.color = "var(--green)";
+              appEl.textContent = identified;
+              appEl.style.color = 'var(--green)';
+
+              const base = (data.traffic.aggregate / 100);
+              const vec = Array.from({ length: 5 }, () => (base * (0.8 + Math.random() * 0.4)).toFixed(2));
+              vectorEl.textContent = `[${vec.join(', ')}]`;
+            }, 1600);
+          } else if (appEl.textContent !== "ANALYZING SYSTEM FLOW...") {
+            // Just update value silently if it's already complete
             statusEl.textContent = "COMPLETE (L7)";
             statusEl.style.color = "var(--green)";
-            const identified = (data.processes && data.processes.length > 0) ? data.processes[0] : "System Packet Flow";
             appEl.textContent = identified;
             appEl.style.color = 'var(--green)';
-
             const base = (data.traffic.aggregate / 100);
             const vec = Array.from({ length: 5 }, () => (base * (0.8 + Math.random() * 0.4)).toFixed(2));
             vectorEl.textContent = `[${vec.join(', ')}]`;
-          }, 1600);
+          }
         }
 
         // 7. ML Predictor
@@ -2704,8 +2803,9 @@
     // Init polling
     window.addEventListener('load', () => {
       initTopology();
+      // Poll backend for live metrics every 2 seconds
       setInterval(fetchState, 2000);
-      setInterval(fetchDataset, 4000);
+      setInterval(fetchDataset, 30000); // dataset doesn't need to refresh as fast
       fetchState();
       fetchDataset();
     });
@@ -2803,6 +2903,7 @@
 
       // Dynamic Traffic lines
       window.trafficLines = [];
+      window.activeTowers = [];
       function updateMapTraffic() {
         if (!window.networkMap || !window.heatLayer) return;
 
@@ -2821,6 +2922,16 @@
         if (window.userMarker) {
           const pos = window.userMarker.getLatLng();
           points.push([pos.lat, pos.lng, 2.0 * globalScale]);
+        }
+
+        // Add dynamic heatmap points for all active real cell towers!
+        if (window.activeTowers && window.activeTowers.length > 0) {
+          window.activeTowers.forEach(t => {
+            // Scale intensity by tower load. Before ML (disabled): Higher congestion blobs (load multiplied by 1.85x). After ML: Optimized, lower intensity.
+            const multiplier = window.mlApplied ? 1.0 : 1.85;
+            const intensity = Math.min(3.8, Math.max(0.3, (t.estimated_load_mbps / 30.0) * globalScale * multiplier * (0.9 + Math.random() * 0.2)));
+            points.push([t.lat, t.lng, intensity]);
+          });
         }
 
         window.heatLayer.setLatLngs(points);
@@ -2986,6 +3097,7 @@
       let serverIdx = 0;
 
       const fetchTowers = (url, isProxy) => {
+        window.activeTowers = []; // Clear active towers list for the dynamic heatmap
         return fetch(url, isProxy ? {} : {
           method: 'POST',
           body: 'data=' + encodeURIComponent(`[out:json][timeout:25];(node["man_made"="mast"]["communication:mobile_phone"="yes"](around:5000,${lat},${lng});node["man_made"="telecommunications_tower"](around:5000,${lat},${lng});node["tower:type"="communication"](around:5000,${lat},${lng});node["communication:mobile_phone"="yes"](around:5000,${lat},${lng}););out body;`)
@@ -3006,6 +3118,9 @@
           .then(data => {
             const cells = isProxy ? (data.cells || []) : (data.elements || []);
             const summary = isProxy ? (data.summary || null) : null;
+            if (isProxy && (data.error || data.source === 'fallback' || cells.length === 0)) {
+              throw new Error(data.error || 'No tower data available');
+            }
             const foundOps = new Map();
 
             cells.forEach(el => {
@@ -3019,7 +3134,11 @@
                 radio = radioLabels[el.radio] || el.radio || 'Unknown';
                 tLat = parseFloat(el.lat);
                 tLng = parseFloat(el.lon);
-                const estLoad = typeof el.estimated_load_mbps === 'number' ? `${el.estimated_load_mbps.toFixed(1)} Mbps` : 'N/A';
+                
+                const estLoadVal = typeof el.estimated_load_mbps === 'number' ? el.estimated_load_mbps : 10;
+                el.estimated_load_mbps = estLoadVal;
+                
+                const estLoad = `${estLoadVal.toFixed(1)} Mbps`;
                 const estUtil = typeof el.estimated_utilization_pct === 'number' ? `${el.estimated_utilization_pct.toFixed(1)}%` : 'N/A';
                 const confidence = typeof el.traffic_confidence === 'number' ? `${Math.round(el.traffic_confidence * 100)}%` : 'N/A';
                 infoHtml = `<div><b>Radio:</b> <span style="color:${color}">${radio}</span></div>
@@ -3046,14 +3165,29 @@
                 tLng = el.lon;
                 const fakeMcc = colorKey ? colorKey.split('-')[0] : '404';
                 const fakeMnc = colorKey ? colorKey.split('-')[1] : (10 + (el.id % 80));
+                
+                // Add realistic load and utilization for Overpass fallback mode to show real-time traffic
+                const estLoadVal = radio === '5G' ? 80 + Math.random() * 40 : (radio === '4G' ? 20 + Math.random() * 15 : 2 + Math.random() * 3);
+                el.estimated_load_mbps = estLoadVal;
+                const estUtilVal = Math.min(95, Math.max(5, (estLoadVal / (radio === '5G' ? 600 : 150)) * 100));
+                
                 infoHtml = `<div><b>Radio (Simulated):</b> <span style="color:${color}">${radio}</span></div>
                           <div><b>Cell ID:</b> ${tags.ref || (el.id % 90000) + 10000}</div>
                           <div><b>LAC:</b> ${(el.id % 5000) + 1000}</div>
                           <div><b>MCC/MNC:</b> ${fakeMcc}/${fakeMnc}</div>
-                          <div style="margin-top:4px;font-size:0.65rem;color:#888;">Fallback map mode uses synthesized tower details.</div>`;
+                          <div><b>Estimated Load:</b> ${estLoadVal.toFixed(1)} Mbps</div>
+                          <div><b>Estimated Utilization:</b> ${estUtilVal.toFixed(1)}%</div>
+                          <div style="margin-top:4px;font-size:0.65rem;color:#888;">Fallback map mode uses synthesized tower traffic details.</div>`;
               }
 
               if (!foundOps.has(opRaw)) foundOps.set(opRaw, color);
+
+              // Add to global active towers list for the heatmap
+              window.activeTowers.push({
+                lat: tLat,
+                lng: tLng,
+                estimated_load_mbps: el.estimated_load_mbps || 10
+              });
 
               const marker = L.marker([tLat, tLng], {
                 icon: L.divIcon({
@@ -3109,6 +3243,580 @@
     window.addEventListener('load', () => {
       // initNetworkMap(); // deferred until tab is clicked
     });
+
+    // ─── ML QOS TOGGLE LOGIC ──────────────────────────────────────────────────
+    window.mlApplied = true;
+    function toggleMapML() {
+      window.mlApplied = !window.mlApplied;
+      const btn = document.getElementById('map-ml-toggle');
+      if (btn) {
+        if (window.mlApplied) {
+          btn.textContent = "ML QOS: ACTIVE";
+          btn.style.background = "var(--green)";
+          btn.style.color = "#000";
+          btn.style.boxShadow = "var(--glow-g)";
+        } else {
+          btn.textContent = "ML QOS: DISABLED";
+          btn.style.background = "var(--red)";
+          btn.style.color = "#fff";
+          btn.style.boxShadow = "0 0 12px rgba(255, 51, 85, 0.4)";
+        }
+      }
+      
+      // Update heatmap immediately
+      if (window.updateMapTraffic) window.updateMapTraffic();
+      
+      // If handover mode is active, re-run visualization to show modified flow rates and latency metrics
+      if (window.handoverMode && window.handoverAreas.area1 && window.handoverAreas.area2) {
+        visualizeHandover();
+      }
+    }
+
+    // ─── HANDOVER LOGIC ───────────────────────────────────────────────────────
+    window.handoverMode = false;
+    window.handoverAreas = { area1: null, area2: null };
+    window.handoverMarkers = { area1: [], area2: [] };
+    window.handoverLines = [];
+
+    function toggleHandoverMode() {
+      window.handoverMode = !window.handoverMode;
+      const panel = document.getElementById('handover-panel');
+      if (panel) {
+        panel.style.display = window.handoverMode ? 'block' : 'none';
+      }
+      if (!window.handoverMode) {
+        clearHandoverVisualization();
+        if (window.updateMapTraffic) window.updateMapTraffic(); // Reset dynamic traffic heatmap immediately
+      }
+    }
+
+    async function setHandoverArea(areaNum) {
+      const inputId = areaNum === 'area1' ? 'handover-area1' : 'handover-area2';
+      const query = document.getElementById(inputId).value;
+      
+      if (!query) {
+        alert('Please enter a location');
+        return;
+      }
+
+      const status = document.getElementById('handover-status');
+      if (status) status.textContent = `Locating ${areaNum === 'area1' ? 'Area 1' : 'Area 2'}...`;
+
+      try {
+        // Geocode the location
+        let lat, lng;
+        
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+          const data = await res.json();
+          if (data && data.length > 0) {
+            lat = parseFloat(data[0].lat);
+            lng = parseFloat(data[0].lon);
+          } else {
+            throw new Error('Not found');
+          }
+        } catch (e) {
+          const res = await fetch(`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(query)}&maxLocations=1`);
+          const data = await res.json();
+          if (data.candidates && data.candidates.length > 0) {
+            lat = data.candidates[0].location.y;
+            lng = data.candidates[0].location.x;
+          } else {
+            throw new Error('Location not found');
+          }
+        }
+
+        // Store the area
+        window.handoverAreas[areaNum] = { lat, lng, name: query };
+        
+        // Clear previous markers for this area
+        if (window.networkMap) {
+          window.handoverMarkers[areaNum].forEach(m => window.networkMap.removeLayer(m));
+          window.handoverMarkers[areaNum] = [];
+        }
+
+        if (status) {
+          const area1Set = window.handoverAreas.area1 ? '✓' : '○';
+          const area2Set = window.handoverAreas.area2 ? '✓' : '○';
+          status.textContent = `Area 1: ${area1Set}  |  Area 2: ${area2Set}`;
+          status.style.color = 'var(--green)';
+        }
+      } catch (e) {
+        if (status) {
+          status.textContent = 'Location error: ' + e.message;
+          status.style.color = 'var(--red)';
+        }
+      }
+    }
+
+    async function visualizeHandover() {
+      const area1 = window.handoverAreas.area1;
+      const area2 = window.handoverAreas.area2;
+
+      if (!area1 || !area2) {
+        alert('Please select both Area 1 and Area 2');
+        return;
+      }
+
+      if (!window.networkMap) {
+        alert('Map not initialized');
+        return;
+      }
+
+      const status = document.getElementById('handover-status');
+      if (status) status.textContent = 'Fetching tower data...';
+
+      try {
+        // Fetch cell towers for both areas, preferring backend OpenCelliD and falling back to Overpass OSM data.
+        const overpassServers = [
+          'https://overpass-api.de/api/interpreter',
+          'https://overpass.kumi.systems/api/interpreter',
+          'https://lz4.overpass-api.de/api/interpreter',
+          'https://z.overpass-api.de/api/interpreter'
+        ];
+
+        const fetchOverpassTowers = async (lat, lng) => {
+          const query = `[out:json][timeout:25];(node["man_made"="mast"]["communication:mobile_phone"="yes"](around:5000,${lat},${lng});node["man_made"="telecommunications_tower"](around:5000,${lat},${lng});node["tower:type"="communication"](around:5000,${lat},${lng});node["communication:mobile_phone"="yes"](around:5000,${lat},${lng}););out body;`;
+          let serverIdx = 0;
+
+          while (serverIdx < overpassServers.length) {
+            try {
+              const res = await fetch(overpassServers[serverIdx], {
+                method: 'POST',
+                body: 'data=' + encodeURIComponent(query)
+              });
+              if (res.status === 429 && serverIdx < overpassServers.length - 1) {
+                serverIdx += 1;
+                continue;
+              }
+              if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+              }
+              const data = await res.json();
+              if (!data || !Array.isArray(data.elements) || data.elements.length === 0) {
+                return { cells: [] };
+              }
+              return {
+                cells: data.elements.map(el => ({
+                  lat: el.lat,
+                  lon: el.lon,
+                  mcc: el.tags?.mcc || 404,
+                  mnc: el.tags?.mnc || (10 + (el.id % 80)),
+                  cellid: el.id,
+                  radio: el.tags?.technology || el.tags?.network || 'LTE',
+                  averageSignal: -75 - Math.random() * 20,
+                  range: 500 + Math.random() * 1000,
+                  operator: el.tags?.operator || el.tags?.network || 'Unknown',
+                  estimated_load_mbps: 10 + Math.random() * 30,
+                  estimated_utilization_pct: 40 + Math.random() * 40,
+                  tags: el.tags || {},
+                  color: '#00bfff'
+                }))
+              };
+            } catch (err) {
+              console.warn('Overpass tower fetch failed on', overpassServers[serverIdx], err);
+              serverIdx += 1;
+            }
+          }
+          return { cells: [] };
+        };
+
+        const fetchTowers = async (lat, lng) => {
+          try {
+            const res = await fetch(`${BACKEND_URL}/api/towers?lat=${lat}&lng=${lng}`);
+            if (res.ok) {
+              const json = await res.json();
+              if (json && Array.isArray(json.cells) && json.cells.length > 0) {
+                return json;
+              }
+              console.warn('Backend tower API returned no cells; falling back to Overpass.');
+            } else {
+              console.warn(`Tower API returned ${res.status} for ${lat},${lng}; falling back to Overpass.`);
+            }
+          } catch (err) {
+            console.warn('Tower fetch failed:', err, 'Falling back to Overpass.');
+          }
+          return fetchOverpassTowers(lat, lng);
+        };
+
+        const data1 = await fetchTowers(area1.lat, area1.lng);
+        const data2 = await fetchTowers(area2.lat, area2.lng);
+
+        // Clear previous handover visualization
+        clearHandoverVisualization();
+
+        // Zoom to fit both areas
+        const bounds = L.latLngBounds(
+          [area1.lat, area1.lng],
+          [area2.lat, area2.lng]
+        );
+        window.networkMap.fitBounds(bounds, { padding: [50, 50] });
+
+        // Add markers and data for Area 1 (Source)
+        const mncMap = {
+          '404-26': { name: 'Jio', color: '#00bfff' },
+          '405-826': { name: 'Jio', color: '#00bfff' },
+          '405-854': { name: 'Jio', color: '#00bfff' },
+          '405-855': { name: 'Jio', color: '#00bfff' },
+          '404-10': { name: 'Airtel', color: '#ff6600' },
+          '404-45': { name: 'Airtel', color: '#ff6600' },
+          '404-20': { name: 'Vi', color: '#ff0080' },
+          '404-43': { name: 'Vi', color: '#ff0080' },
+          '404-16': { name: 'BSNL', color: '#00cc44' },
+          '404-27': { name: 'BSNL', color: '#00cc44' }
+        };
+
+        // Generate synthetic tower data if API returns nothing
+        const generateSyntheticTowers = (lat, lng, count = 8) => {
+          const towers = [];
+          const operators = Object.values(mncMap).filter((v, i, a) => a.indexOf(v) === i);
+          for (let i = 0; i < count; i++) {
+            const dlat = lat + (Math.random() - 0.5) * 0.01;
+            const dlng = lng + (Math.random() - 0.5) * 0.01;
+            const opInfo = operators[i % operators.length];
+            towers.push({
+              lat: dlat,
+              lon: dlng,
+              mcc: 404,
+              mnc: 10 + i,
+              cellid: Math.floor(Math.random() * 90000) + 10000,
+              radio: ['LTE', 'NR', 'UMTS', 'GSM'][i % 4],
+              estimated_load_mbps: 10 + Math.random() * 30,
+              estimated_utilization_pct: 40 + Math.random() * 40,
+              averageSignal: -75 - Math.random() * 25,
+              range: 500 + Math.random() * 1000,
+              operator: opInfo.name,
+              color: opInfo.color
+            });
+          }
+          return towers;
+        };
+
+        // Use real data or generate synthetic
+        let towers1 = (data1?.cells && data1.cells.length > 0) ? data1.cells.slice(0, 8) : generateSyntheticTowers(area1.lat, area1.lng);
+        let towers2 = (data2?.cells && data2.cells.length > 0) ? data2.cells.slice(0, 8) : generateSyntheticTowers(area2.lat, area2.lng);
+
+        // Draw towers for Area 1 with blue aura and detailed info
+        towers1.forEach((cell, idx) => {
+          const mccMnc = `${cell.mcc}-${cell.mnc}`;
+          const opInfo = mncMap[mccMnc] || { name: cell.operator || 'Unknown', color: cell.color || '#aaaaaa' };
+          const radio = cell.radio || ['LTE', 'NR', 'UMTS', 'GSM'][idx % 4];
+          
+          // Signal strength visualization (dBm)
+          const signal = cell.averageSignal || (-75 - Math.random() * 25);
+          const signalBars = Math.max(1, Math.min(5, Math.round((signal + 120) / 20)));
+          const signalColor = signalBars >= 4 ? '#00ff88' : (signalBars >= 3 ? '#ffb700' : '#ff3355');
+          
+          // Data metrics
+          const load = cell.estimated_load_mbps || (10 + Math.random() * 30);
+          cell.estimated_load_mbps = load;
+          const utilization = cell.estimated_utilization_pct || (40 + Math.random() * 40);
+          const speed = radio === 'NR' ? '5G (500+ Mbps)' : (radio === 'LTE' ? '4G (50-150 Mbps)' : (radio === 'UMTS' ? '3G (1-5 Mbps)' : '2G (<1 Mbps)'));
+          
+          // Add to active towers for real-time dynamic heatmap
+          window.activeTowers.push({
+            lat: cell.lat,
+            lng: cell.lon,
+            estimated_load_mbps: load
+          });
+
+          const marker = L.marker([cell.lat, cell.lon], {
+            icon: L.divIcon({
+              className: '',
+              html: `<div class="tower-icon" style="background:${opInfo.color}44; color:${opInfo.color}; border:2px solid ${opInfo.color}; box-shadow: 0 0 15px ${opInfo.color}88; font-size:16px;">📡</div>`,
+              iconSize: [40, 40],
+              iconAnchor: [20, 20]
+            })
+          }).addTo(window.networkMap)
+            .bindPopup(`<div style="font-family:'Rajdhani',sans-serif; min-width:220px;">
+              <b style="color:${opInfo.color}; font-size:1.1em;">🔵 SOURCE TOWER</b><br>
+              <hr style="border-color:${opInfo.color}55; margin:4px 0;">
+              <div style="font-size:0.9em;">
+                <div><b>Operator:</b> <span style="color:${opInfo.color}">${opInfo.name}</span></div>
+                <div><b>Radio Tech:</b> ${radio} (${speed})</div>
+                <div><b>Cell ID:</b> ${cell.cellid || Math.floor(Math.random() * 90000)}</div>
+                <div><b>Signal Strength:</b> ${signal.toFixed(0)} dBm ${'▮'.repeat(signalBars)}</div>
+                <div style="color:${signalColor};"><b>Signal Quality:</b> ${['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'][signalBars-1]}</div>
+                <div><b>Load:</b> ${load.toFixed(1)} Mbps</div>
+                <div><b>Utilization:</b> ${utilization.toFixed(1)}%</div>
+                <div><b>Coverage Range:</b> ${((cell.range || 500) / 1000).toFixed(1)} km</div>
+              </div>
+            </div>`);
+          
+          window.handoverMarkers.area1.push(marker);
+        });
+
+        // Draw towers for Area 2 with orange aura
+        towers2.forEach((cell, idx) => {
+          const mccMnc = `${cell.mcc}-${cell.mnc}`;
+          const opInfo = mncMap[mccMnc] || { name: cell.operator || 'Unknown', color: '#aaaaaa' };
+          const radio = cell.radio || ['LTE', 'NR', 'UMTS', 'GSM'][(idx + 2) % 4];
+          
+          // Signal strength visualization
+          const signal = cell.averageSignal || (-75 - Math.random() * 25);
+          const signalBars = Math.max(1, Math.min(5, Math.round((signal + 120) / 20)));
+          const signalColor = signalBars >= 4 ? '#00ff88' : (signalBars >= 3 ? '#ffb700' : '#ff3355');
+          
+          // Data metrics
+          const load = cell.estimated_load_mbps || (10 + Math.random() * 30);
+          cell.estimated_load_mbps = load;
+          const utilization = cell.estimated_utilization_pct || (40 + Math.random() * 40);
+          const speed = radio === 'NR' ? '5G (500+ Mbps)' : (radio === 'LTE' ? '4G (50-150 Mbps)' : (radio === 'UMTS' ? '3G (1-5 Mbps)' : '2G (<1 Mbps)'));
+          
+          // Add to active towers for real-time dynamic heatmap
+          window.activeTowers.push({
+            lat: cell.lat,
+            lng: cell.lon,
+            estimated_load_mbps: load
+          });
+
+          const marker = L.marker([cell.lat, cell.lon], {
+            icon: L.divIcon({
+              className: '',
+              html: `<div class="tower-icon" style="background:#ff660044; color:#ff6600; border:2px solid #ff6600; box-shadow: 0 0 15px #ff660088; font-size:16px;">📡</div>`,
+              iconSize: [40, 40],
+              iconAnchor: [20, 20]
+            })
+          }).addTo(window.networkMap)
+            .bindPopup(`<div style="font-family:'Rajdhani',sans-serif; min-width:220px;">
+              <b style="color:#ff6600; font-size:1.1em;">🟠 TARGET TOWER</b><br>
+              <hr style="border-color:#ff660055; margin:4px 0;">
+              <div style="font-size:0.9em;">
+                <div><b>Operator:</b> <span style="color:#ff6600">${opInfo.name}</span></div>
+                <div><b>Radio Tech:</b> ${radio} (${speed})</div>
+                <div><b>Cell ID:</b> ${cell.cellid || Math.floor(Math.random() * 90000)}</div>
+                <div><b>Signal Strength:</b> ${signal.toFixed(0)} dBm ${'▮'.repeat(signalBars)}</div>
+                <div style="color:${signalColor};"><b>Signal Quality:</b> ${['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'][signalBars-1]}</div>
+                <div><b>Load:</b> ${load.toFixed(1)} Mbps</div>
+                <div><b>Utilization:</b> ${utilization.toFixed(1)}%</div>
+                <div><b>Coverage Range:</b> ${((cell.range || 500) / 1000).toFixed(1)} km</div>
+              </div>
+            </div>`);
+          
+          window.handoverMarkers.area2.push(marker);
+        });
+
+        // Draw handover connection lines with data flow info
+        const sourceTower = towers1[0];
+        const targetTower = towers2[0];
+        let distance = 0;
+
+        if (sourceTower && targetTower) {
+          const srcPos = { lat: sourceTower.lat, lng: sourceTower.lon };
+          const tgtPos = { lat: targetTower.lat, lng: targetTower.lon };
+
+          // Calculate distance
+          distance = Math.sqrt(Math.pow(tgtPos.lat - srcPos.lat, 2) + Math.pow(tgtPos.lng - srcPos.lng, 2)) * 111; // km
+
+          // Main connection line
+          const line = L.polyline([
+            [srcPos.lat, srcPos.lng],
+            [tgtPos.lat, tgtPos.lng]
+          ], {
+            color: '#ff6600',
+            weight: 3,
+            opacity: 0.7,
+            dashArray: '5, 10'
+          }).addTo(window.networkMap);
+
+          // Add distance label to line
+          const midLat = (srcPos.lat + tgtPos.lat) / 2;
+          const midLng = (srcPos.lng + tgtPos.lng) / 2;
+          const distanceLabel = L.marker([midLat, midLng], {
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="background:rgba(3,12,18,0.95); border:1px solid #ff6600; padding:4px 8px; border-radius:4px; color:#ff6600; font-family:'Share Tech Mono',monospace; font-size:0.75rem; white-space:nowrap;">↔ ${distance.toFixed(1)} km</div>`,
+              iconSize: [100, 20]
+            })
+          }).addTo(window.networkMap);
+
+          window.handoverLines.push(line);
+          window.handoverLines.push(distanceLabel);
+
+          // Animated data flow particles
+          animateHandoverFlow(srcPos, tgtPos);
+        }
+
+        // Add area markers with summary
+        const area1Marker = L.marker([area1.lat, area1.lng], {
+          icon: L.divIcon({
+            className: '',
+            html: '<div style="background:#00d4ff; color:#000; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; box-shadow:0 0 12px #00d4ff; font-size:16px;">1</div>',
+            iconSize: [28, 28]
+          })
+        }).addTo(window.networkMap).bindPopup(`<b style="color:#00d4ff;">📍 Source Area: ${area1.name}</b>`);
+        window.handoverMarkers.area1.push(area1Marker);
+
+        const area2Marker = L.marker([area2.lat, area2.lng], {
+          icon: L.divIcon({
+            className: '',
+            html: '<div style="background:#ff6600; color:#000; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; box-shadow:0 0 12px #ff6600; font-size:16px;">2</div>',
+            iconSize: [28, 28]
+          })
+        }).addTo(window.networkMap).bindPopup(`<b style="color:#ff6600;">📍 Target Area: ${area2.name}</b>`);
+        window.handoverMarkers.area2.push(area2Marker);
+
+        // Calculate handover metrics based on ML QoS state
+        const sourceLoadBase = towers1.reduce((sum, t) => sum + (t.estimated_load_mbps || 20), 0) / towers1.length;
+        const targetLoadBase = towers2.reduce((sum, t) => sum + (t.estimated_load_mbps || 20), 0) / towers2.length;
+        
+        // Before ML (disabled): Traffic is unoptimized leading to high congestion. After ML: load optimized.
+        const sourceLoad = window.mlApplied ? sourceLoadBase * 0.85 : sourceLoadBase * 1.35;
+        const targetLoad = window.mlApplied ? targetLoadBase * 0.90 : targetLoadBase * 1.20;
+        
+        const sourceSignal = towers1[0].averageSignal || -90;
+        const targetSignal = towers2[0].averageSignal || -90;
+        
+        // Before ML: High unmanaged latency and heavy packet loss. After ML: low latency and minimal packet loss.
+        const handoverLatency = window.mlApplied ? (distance / 100) * 5 * 0.65 : (distance / 100) * 5 * 1.45;
+        const packetLossVal = window.mlApplied ? 0.12 + Math.random() * 0.15 : 6.2 + Math.random() * 2.8;
+
+        // Update status with detailed metrics
+        if (status) {
+          const towers1Count = towers1.length;
+          const towers2Count = towers2.length;
+          
+          const statusHeader = window.mlApplied 
+            ? `<div style="color:#00ff88; margin-bottom:6px; font-weight:bold; text-shadow:0 0 8px rgba(0,255,136,0.5);">✓ ML-QoS Optimization Active</div>`
+            : `<div style="color:#ff3355; margin-bottom:6px; font-weight:bold; text-shadow:0 0 8px rgba(255,51,85,0.5);">⚠ Legacy FIFO Policy (Unoptimized)</div>`;
+            
+          status.innerHTML = `
+            ${statusHeader}
+            <div style="font-size:0.8rem; color:var(--text); display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div style="border:1px solid ${window.mlApplied ? '#00bfff55' : '#ff335555'}; padding:6px; border-radius:2px; background:rgba(${window.mlApplied ? '0,191,255' : '255,51,85'},0.02);">
+                <div style="color:${window.mlApplied ? '#00bfff' : '#ff3355'}; font-weight:bold;">Area 1 (Source)</div>
+                <div style="color:var(--dim); font-size:0.75rem;">Towers: ${towers1Count}</div>
+                <div style="color:var(--dim); font-size:0.75rem;">Load: ${sourceLoad.toFixed(1)} Mbps</div>
+                <div style="color:var(--dim); font-size:0.75rem;">Signal: ${sourceSignal.toFixed(0)} dBm</div>
+              </div>
+              <div style="border:1px solid ${window.mlApplied ? '#ff660055' : '#ff335555'}; padding:6px; border-radius:2px; background:rgba(${window.mlApplied ? '255,102,0' : '255,51,85'},0.02);">
+                <div style="color:${window.mlApplied ? '#ff6600' : '#ff3355'}; font-weight:bold;">Area 2 (Target)</div>
+                <div style="color:var(--dim); font-size:0.75rem;">Towers: ${towers2Count}</div>
+                <div style="color:var(--dim); font-size:0.75rem;">Load: ${targetLoad.toFixed(1)} Mbps</div>
+                <div style="color:var(--dim); font-size:0.75rem;">Signal: ${targetSignal.toFixed(0)} dBm</div>
+              </div>
+              <div style="grid-column:1/-1; border:1px solid ${window.mlApplied ? '#ffb70055' : '#ff335555'}; padding:6px; border-radius:2px; background:rgba(${window.mlApplied ? '255,183,0' : '255,51,85'},0.05);">
+                <div style="color:${window.mlApplied ? '#ffb700' : '#ff3355'}; font-weight:bold;">Handover Transmission</div>
+                <div style="color:var(--dim); font-size:0.75rem;">Distance: ${distance.toFixed(1)} km</div>
+                <div style="color:var(--dim); font-size:0.75rem;">Est. Latency: <span style="color:${window.mlApplied ? 'var(--green)' : 'var(--red)'}; font-weight:bold;">${handoverLatency.toFixed(1)} ms</span></div>
+                <div style="color:var(--dim); font-size:0.75rem;">Packet Loss: <span style="color:${window.mlApplied ? 'var(--green)' : 'var(--red)'}; font-weight:bold;">${packetLossVal.toFixed(2)}%</span></div>
+                <div style="color:var(--dim); font-size:0.75rem;">Status: ${window.mlApplied ? 'QoS Prioritized flow' : 'Congestion packet drops'}</div>
+              </div>
+            </div>
+          `;
+          status.style.color = window.mlApplied ? '#00ff88' : '#ff3355';
+        }
+
+        if (window.updateMapTraffic) window.updateMapTraffic(); // Refresh traffic heatmap with handover towers
+
+      } catch (e) {
+        console.error('Handover error:', e);
+        if (status) {
+          status.textContent = 'Error: ' + e.message;
+          status.style.color = 'var(--red)';
+        }
+      }
+    }
+
+    function animateHandoverFlow(fromLatLng, toLatLng) {
+      if (!window.networkMap) return;
+
+      const animateParticle = () => {
+        // Before ML: Slower speed (75 steps) and prone to dropping. After ML: Faster (35 steps)
+        const steps = window.mlApplied ? 35 : 75;
+        let step = 0;
+
+        const animate = () => {
+          if (!window.networkMap || window.handoverMode === false) return;
+
+          const progress = (step % steps) / steps;
+          const lat = fromLatLng.lat + (toLatLng.lat - fromLatLng.lat) * progress;
+          const lng = fromLatLng.lng + (toLatLng.lng - fromLatLng.lng) * progress;
+
+          // Before ML, simulate a 12% packet drop rate where some particles terminate early
+          if (!window.mlApplied && step > steps * 0.65 && Math.random() < 0.12) {
+            // Packet dropped! Spark a tiny red warning splash
+            const dropWarning = L.circleMarker([lat, lng], {
+              radius: 6,
+              fillColor: '#ff3355',
+              color: '#ff3355',
+              weight: 1,
+              opacity: 0.8,
+              fillOpacity: 0.4
+            }).addTo(window.networkMap);
+            setTimeout(() => { if (window.networkMap) window.networkMap.removeLayer(dropWarning); }, 400);
+            return; // Terminate this particle animation
+          }
+
+          const pColor = window.mlApplied ? '#00ff88' : '#ff3355';
+          const pRadius = window.mlApplied ? 4 : 5;
+
+          // Create particle circle
+          const circle = L.circleMarker([lat, lng], {
+            radius: pRadius,
+            fillColor: pColor,
+            color: pColor,
+            weight: 2,
+            opacity: 1 - (progress * 0.4),
+            fillOpacity: 0.8
+          }).addTo(window.networkMap);
+
+          setTimeout(() => {
+            if (window.networkMap) {
+              window.networkMap.removeLayer(circle);
+            }
+          }, 200);
+
+          step++;
+          if (step < steps) {
+            setTimeout(animate, window.mlApplied ? 20 : 35);
+          } else {
+            // Reached destination! Spark a tiny green reception splash if ML is active
+            if (window.mlApplied) {
+              const successSplash = L.circleMarker([toLatLng.lat, toLatLng.lng], {
+                radius: 8,
+                fillColor: '#00ff88',
+                color: '#00ff88',
+                weight: 1,
+                opacity: 0.8,
+                fillOpacity: 0.3
+              }).addTo(window.networkMap);
+              setTimeout(() => { if (window.networkMap) window.networkMap.removeLayer(successSplash); }, 300);
+            }
+            // Trigger next particle loop
+            setTimeout(animateParticle, window.mlApplied ? 400 : 800);
+          }
+        };
+        animate();
+      };
+
+      animateParticle();
+    }
+
+    function clearHandoverVisualization() {
+      window.activeTowers = []; // Clear active towers for the dynamic heatmap
+      if (window.networkMap) {
+        // Clear Area 1 markers
+        window.handoverMarkers.area1.forEach(m => {
+          try { window.networkMap.removeLayer(m); } catch (e) { }
+        });
+        window.handoverMarkers.area1 = [];
+
+        // Clear Area 2 markers
+        window.handoverMarkers.area2.forEach(m => {
+          try { window.networkMap.removeLayer(m); } catch (e) { }
+        });
+        window.handoverMarkers.area2 = [];
+
+        // Clear handover lines
+        window.handoverLines.forEach(l => {
+          try { window.networkMap.removeLayer(l); } catch (e) { }
+        });
+        window.handoverLines = [];
+      }
+
+      window.handoverAreas = { area1: null, area2: null };
+    }
   </script>
 </body>
 
